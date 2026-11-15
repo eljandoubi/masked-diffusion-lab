@@ -456,6 +456,126 @@ def denoiser_facts(report: dict, baseline: dict | None = None) -> list[str]:
     return facts
 
 
+def stopped_table(report: dict, stopped: dict, base: dict) -> str:
+    """Conditional KL after a short and the full L-BFGS budget, mean over seeds."""
+    full, short = cell_values(report, "cond_kl"), cell_values(stopped, "cond_kl")
+    widths, sizes = stopped["config"]["widths"], stopped["config"]["sample_sizes"]
+    best = {(r["n"], r["seed"]): r["loss"] for r in base["minimum_loss"]}
+    rows = []
+    for n in sizes:
+        for config, cells, runs in (
+            (stopped["config"], short, stopped["runs"]),
+            (report["config"], full, report["runs"]),
+        ):
+            gaps = [
+                float(
+                    np.mean(
+                        [
+                            r["train_loss"] / best[(n, r["seed"])] - 1
+                            for r in runs
+                            if (r["width"], r["n"]) == (w, n)
+                        ]
+                    )
+                )
+                for w in widths
+            ]
+            ratio = cells[(widths[-1], n)].mean() / cells[(widths[0], n)].mean()
+            rows.append(
+                [str(n), str(config["iterations"]), "error"]
+                + [sci(cells[(w, n)].mean()) for w in widths]
+                + [f"{ratio:.2f}"]
+            )
+            rows.append(
+                [str(n), str(config["iterations"]), "training loss above its minimum"]
+                + [sci(gap) for gap in gaps]
+                + [""]
+            )
+    header = ["n", "iterations", "quantity"] + [f"width {w}" for w in widths]
+    header.append(f"error, width {widths[-1]} / width {widths[0]}")
+    return table(header, rows)
+
+
+def contexts_table(contexts: dict, law: str) -> str:
+    """Conditional KL on reached and unreached partial sequences, mean over seeds."""
+    config = contexts["config"]
+    rows = []
+    for n in config["sample_sizes"]:
+        weight = np.mean(
+            [
+                e["unreached"]
+                for e in contexts["exposure"]
+                if (e["law"], e["n"]) == (law, n)
+            ]
+        )
+        models = [
+            (
+                f"width {w}",
+                [
+                    r
+                    for r in contexts["runs"]
+                    if (r["law"], r["width"], r["n"]) == (law, w, n)
+                ],
+            )
+            for w in config["widths"]
+        ] + [
+            (
+                f"plug-in {a}",
+                [
+                    r
+                    for r in contexts["plug_in"]
+                    if (r["law"], r["alpha"], r["n"]) == (law, a, n)
+                ],
+            )
+            for a in config["alphas"]
+        ]
+        for name, runs in models:
+            total, seen, unseen = (
+                float(np.mean([r[key] for r in runs]))
+                for key in ("cond_kl", "cond_kl_reached", "cond_kl_unreached")
+            )
+            rows.append(
+                [
+                    str(n),
+                    name,
+                    sci(total),
+                    sci(seen),
+                    sci(unseen),
+                    f"{unseen / total:.2f}",
+                    f"{weight:.2f}",
+                ]
+            )
+    header = [
+        "n",
+        "model",
+        "cond KL",
+        "on reached",
+        "on unreached",
+        "share of the error on unreached",
+        "share of the weight on unreached",
+    ]
+    return table(header, rows)
+
+
+def contexts_facts(contexts: dict, report: dict, law: str) -> list[str]:
+    """Largest gap between the retrained networks and the main grid."""
+    gaps = []
+    for run in contexts["runs"]:
+        if run["law"] != law:
+            continue
+        first = next(
+            r
+            for r in report["runs"]
+            if (r["width"], r["n"], r["seed"]) == (run["width"], run["n"], run["seed"])
+        )
+        gaps.append(abs(run["cond_kl"] / first["cond_kl"] - 1))
+    used = {run["iterations_used"] for run in contexts["runs"] if run["law"] == law}
+    return [
+        f"{len(gaps)} networks trained again: largest relative change of the "
+        f"conditional KL against the main grid {max(gaps):.1e}",
+        f"L-BFGS iterations used: {sorted(used)}",
+    ]
+
+
 def compensation_table(report: dict) -> str:
     rows = report["markov"]["rows"]
     exact = rows[0]["sampler_kl"]
@@ -520,6 +640,8 @@ def main() -> None:
         print("\n".join(f"- {line}" for line in sampler_facts(report)), "\n")
     baseline_path = RESULTS / "baseline.json"
     baseline = json.loads(baseline_path.read_text()) if baseline_path.exists() else {}
+    contexts_path = RESULTS / "contexts.json"
+    contexts = json.loads(contexts_path.read_text()) if contexts_path.exists() else {}
     for law in ("markov", "potts"):
         path = RESULTS / f"denoiser_{law}.json"
         if not path.exists():
@@ -549,6 +671,20 @@ def main() -> None:
         print(paired_widths(report), "\n")
         print("### derived numbers\n")
         print("\n".join(f"- {line}" for line in denoiser_facts(report, plug_in)), "\n")
+        if contexts:
+            print("### error on reached and unreached partial sequences\n")
+            print(contexts_table(contexts, law), "\n")
+            print(
+                "\n".join(
+                    f"- {line}" for line in contexts_facts(contexts, report, law)
+                ),
+                "\n",
+            )
+        stopped_path = RESULTS / f"denoiser_{law}_stop100.json"
+        if stopped_path.exists() and plug_in:
+            stopped = json.loads(stopped_path.read_text())
+            print("### early stopping: a short L-BFGS budget\n")
+            print(stopped_table(report, stopped, plug_in), "\n")
         if report["budget_check"]:
             print("### budget check, exact trainer (L-BFGS iterations)\n")
             print(budget_table(report, "budget_check", "runs"), "\n")
