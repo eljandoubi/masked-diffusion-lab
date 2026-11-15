@@ -2,6 +2,8 @@
 
 import numpy as np
 
+from maskdiff.laws import counts
+
 
 def state_digits(vocab: int, length: int) -> np.ndarray:
     """Tokens (V for the mask) of every partial sequence, shape (S, L)."""
@@ -22,20 +24,28 @@ def partial_marginals(p: np.ndarray) -> np.ndarray:
     return out
 
 
-def conditional_table(m: np.ndarray) -> np.ndarray:
-    """Conditionals c[s, i, y] = P(x_i = y | known part of s), shape (S, L, V)."""
+def conditional_table(m: np.ndarray, alpha: float = 0.0) -> np.ndarray:
+    """Conditionals c[s, i, y] = P(x_i = y | known part of s), shape (S, L, V).
+
+    m holds probabilities or counts; alpha is added to every count of a context.
+    """
     length, vocab = m.ndim, m.shape[0] - 1
     table = np.zeros(m.shape + (length, vocab))
     for i in range(length):
         masked = [slice(None)] * length
         masked[i] = vocab
-        context = m[tuple(masked)]
+        context = m[tuple(masked)] + vocab * alpha
         for y in range(vocab):
             known = [slice(None)] * length
             known[i] = y
-            table[(*masked, i, y)] = m[tuple(known)] / context
+            table[(*masked, i, y)] = (m[tuple(known)] + alpha) / context
             table[(*known, i, y)] = 1.0
     return table.reshape(-1, length, vocab)
+
+
+def plug_in_table(data: np.ndarray, vocab: int, alpha: float) -> np.ndarray:
+    """Conditionals (S, L, V) from the rows of data, alpha added to each count."""
+    return conditional_table(partial_marginals(counts(data, vocab)), alpha)
 
 
 def mask_tokens(

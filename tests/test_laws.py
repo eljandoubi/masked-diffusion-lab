@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from maskdiff.laws import (
+    counts,
     draw,
     empirical_law,
     entropy,
@@ -90,6 +91,12 @@ def test_ring_is_invariant_under_a_cyclic_shift():
 
 def test_entropy_of_the_uniform_law():
     assert entropy(np.full(27, 1 / 27)) == pytest.approx(np.log(27))
+
+
+def test_counts_are_the_numbers_of_occurrences_of_each_sequence():
+    data = np.array([[0, 1], [0, 1], [1, 0], [1, 1]])
+    assert counts(data, 2).tolist() == [[0, 2], [1, 1]]
+    assert counts(data, 3).shape == (3, 3) and counts(data, 3).sum() == 4
 
 
 def test_empirical_law_counts_relative_frequencies():

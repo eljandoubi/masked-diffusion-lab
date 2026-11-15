@@ -19,13 +19,18 @@ def training_sample(p: np.ndarray, n: int, seed: int) -> np.ndarray:
     return draw(p, n, np.random.default_rng([seed, n]))
 
 
-def empirical_law(data: np.ndarray, vocab: int) -> np.ndarray:
-    """Relative frequencies of the rows of data (n, L), shape (V,) * L."""
+def counts(data: np.ndarray, vocab: int) -> np.ndarray:
+    """Number of times each sequence occurs among the rows of data, shape (V,) * L."""
     shape = (vocab,) * data.shape[1]
-    counts = np.bincount(
+    flat = np.bincount(
         np.ravel_multi_index(data.T, shape), minlength=vocab ** len(shape)
     )
-    return counts.reshape(shape) / len(data)
+    return flat.reshape(shape)
+
+
+def empirical_law(data: np.ndarray, vocab: int) -> np.ndarray:
+    """Relative frequencies of the rows of data (n, L), shape (V,) * L."""
+    return counts(data, vocab) / len(data)
 
 
 def markov_chain(length: int, vocab: int, persistence: float) -> np.ndarray:

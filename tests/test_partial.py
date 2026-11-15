@@ -3,11 +3,12 @@ import itertools
 import numpy as np
 import pytest
 
-from maskdiff.laws import markov_chain, potts_ring
+from maskdiff.laws import draw, empirical_law, markov_chain, potts_ring
 from maskdiff.partial import (
     conditional_table,
     mask_tokens,
     partial_marginals,
+    plug_in_table,
     state_digits,
     state_index,
 )
@@ -81,6 +82,36 @@ def test_chain_rule_in_any_order_gives_back_the_law():
             prob *= table[state_index(state, 3), i, x[i]]
             state[i] = x[i]
         assert prob == pytest.approx(p[tuple(x)])
+
+
+def test_plug_in_conditionals_add_alpha_to_the_counts_of_the_rows():
+    data = np.array([[0, 0], [0, 0], [0, 1]])
+    table = plug_in_table(data, 2, 0.5)
+    # base 3 states: (m, m) is 8, (0, m) is 2, (m, 1) is 7 and (m, 0) is 6
+    assert table[8, 0] == pytest.approx([3.5 / 4, 0.5 / 4])
+    assert table[8, 1] == pytest.approx([2.5 / 4, 1.5 / 4])
+    assert table[2, 1] == pytest.approx([2.5 / 4, 1.5 / 4])
+    assert table[7, 0] == pytest.approx([1.5 / 2, 0.5 / 2])
+    assert table[6, 0] == pytest.approx([2.5 / 3, 0.5 / 3])
+
+
+def test_plug_in_conditionals_without_smoothing_are_the_empirical_frequencies():
+    data = draw(markov_chain(3, 3, 0.5), 3000, np.random.default_rng(0))
+    table = plug_in_table(data, 3, 0.0)
+    empirical = conditional_table(partial_marginals(empirical_law(data, 3)))
+    assert table == pytest.approx(empirical, abs=1e-12)
+
+
+def test_smoothed_conditionals_are_distributions_and_uniform_in_unseen_contexts():
+    data = np.zeros((5, 3), dtype=int)
+    table = plug_in_table(data, 2, 1.0)
+    assert table.sum(axis=-1) == pytest.approx(1.0)
+    assert table[state_index(np.array([1, 2, 2]), 2), 1] == pytest.approx([0.5, 0.5])
+    assert table[state_index(np.array([2, 2, 2]), 2), 0] == pytest.approx(
+        [6 / 7, 1 / 7]
+    )
+    masked = state_digits(2, 3) == 2
+    assert plug_in_table(data, 2, 1e9)[masked] == pytest.approx(0.5, abs=1e-6)
 
 
 @pytest.mark.parametrize("t", [0.1, 0.5, 0.9])
