@@ -97,11 +97,28 @@ def cell_values(
     return {k: np.array(v) for k, v in cells.items()}
 
 
-def denoiser_table(report: dict, key: str) -> str:
+def plug_in_means(base: dict, key: str) -> dict[tuple[float, int], float]:
+    """Mean over seeds of a plug-in error, by (alpha, n)."""
+    cells: dict[tuple[float, int], list[float]] = {}
+    for run in base["runs"]:
+        cells.setdefault((run["alpha"], run["n"]), []).append(run[key])
+    return {k: float(np.mean(v)) for k, v in cells.items()}
+
+
+def denoiser_table(report: dict, key: str, base: dict | None = None) -> str:
     cells = cell_values(report, key)
     widths, sizes = report["config"]["widths"], report["config"]["sample_sizes"]
-    rows = [[str(n)] + [sci(cells[(w, n)].mean()) for w in widths] for n in sizes]
-    return table(["n"] + [f"width {w}" for w in widths], rows)
+    plug = plug_in_means(base, key) if base else {}
+    alphas = sorted({alpha for alpha, _ in plug})
+    header = ["n"] + [f"width {w}" for w in widths]
+    header += [f"plug-in {alpha}" for alpha in alphas]
+    rows = [
+        [str(n)]
+        + [sci(cells[(w, n)].mean()) for w in widths]
+        + [sci(plug[(alpha, n)]) for alpha in alphas]
+        for n in sizes
+    ]
+    return table(header, rows)
 
 
 def slope_by_decade(report: dict) -> str:
@@ -178,9 +195,27 @@ def spread(report: dict) -> str:
     cells = cell_values(report, "cond_kl")
     ratio = [v.std(ddof=1) / v.mean() for v in cells.values()]
     return (
-        "seed to seed std over mean of the conditional KL: "
-        f"median {np.median(ratio):.2f}, max {max(ratio):.2f}"
+        "relative standard deviation over seeds (sd / mean, ddof 1) of the "
+        f"conditional KL: median {np.median(ratio):.2f}, max {max(ratio):.2f}"
     )
+
+
+def train_gap_table(report: dict, base: dict) -> str:
+    """Training loss above its minimum, relative, mean over seeds."""
+    best = {(r["n"], r["seed"]): r["loss"] for r in base["minimum_loss"]}
+    widths, sizes = report["config"]["widths"], report["config"]["sample_sizes"]
+    rows = []
+    for n in sizes:
+        row = [str(n)]
+        for w in widths:
+            gaps = [
+                r["train_loss"] / best[(n, r["seed"])] - 1
+                for r in report["runs"]
+                if (r["width"], r["n"]) == (w, n)
+            ]
+            row.append(sci(float(np.mean(gaps))))
+        rows.append(row)
+    return table(["n"] + [f"width {w}" for w in widths], rows)
 
 
 def budget_table(report: dict, check: str, base: str) -> str:
@@ -232,7 +267,12 @@ def trainer_table(report: dict) -> str:
 
 
 def run_note(report: dict) -> str:
-    return f"wall {report['wall_seconds']:.0f} s, load {report['load_average']:.1f}"
+    note = f"wall {report['wall_seconds']:.0f} s, load {report['load_average']:.1f}"
+    if "extension" in report:
+        later = report["extension"]
+        note += f"; extension wall {later['wall_seconds']:.0f} s"
+        note += f", load {later['load_average']:.1f}"
+    return note
 
 
 def sampler_facts(report: dict) -> list[str]:
@@ -261,7 +301,78 @@ def sampler_facts(report: dict) -> list[str]:
     ]
 
 
-def denoiser_facts(report: dict) -> list[str]:
+def paired_facts(report: dict) -> list[str]:
+    widths, sizes = report["config"]["widths"], report["config"]["sample_sizes"]
+    cells = len(sizes) * report["config"]["seeds"]
+    facts = []
+    for narrow, wide in zip(widths, widths[1:], strict=False):
+        above = sum(
+            int((seed_values(report, wide, n) > seed_values(report, narrow, n)).sum())
+            for n in sizes
+        )
+        facts.append(
+            f"width {wide} above width {narrow} in {above} of {cells} seed-paired cells"
+        )
+    return facts
+
+
+def plug_in_facts(report: dict, base: dict) -> list[str]:
+    widths, sizes = report["config"]["widths"], report["config"]["sample_sizes"]
+    cond, sampler = cell_values(report, "cond_kl"), cell_values(report, "sampler_kl")
+    plug, plug_k = plug_in_means(base, "cond_kl"), plug_in_means(base, "sampler_kl")
+    alphas = sorted({alpha for alpha, _ in plug})
+    facts = []
+    for alpha in alphas:
+        better = [
+            n
+            for n in sizes
+            if plug[(alpha, n)] < min(cond[(w, n)].mean() for w in widths)
+        ]
+        facts.append(
+            f"plug-in {alpha}: conditional KL below every width at n in {better}"
+        )
+    for n in (sizes[0], sizes[-1]):
+        values = ", ".join(f"{alpha}: {sci(plug_k[(alpha, n)])}" for alpha in alphas)
+        best = min(sampler[(w, n)].mean() for w in widths)
+        facts.append(
+            f"K = {report['config']['sampler_steps']} sampler KL at n = {n}: "
+            f"plug-in {values}; best width {sci(best)}; "
+            f"exact conditionals {sci(report['exact_sampler_kl'])}"
+        )
+    best = {(r["n"], r["seed"]): r["loss"] for r in base["minimum_loss"]}
+    below = [
+        r
+        for r in report["runs"]
+        if r["train_loss"] < best[(r["n"], r["seed"])] * (1 - 1e-9)
+    ]
+    facts.append(
+        f"training loss below its minimum: {len(below)} of {len(report['runs'])} runs"
+    )
+    return facts
+
+
+def rerun_facts(report: dict) -> list[str]:
+    again = report["budget_rerun"]
+    change = []
+    for run in again:
+        first = next(
+            r
+            for r in report["runs"]
+            if (r["width"], r["n"], r["seed"]) == (run["width"], run["n"], 0)
+        )
+        change.append(abs(run["cond_kl"] / first["cond_kl"] - 1))
+    used = [
+        f"{r['iterations_used']} of {r['budget']}"
+        for r in again + report["budget_check"]
+    ]
+    return [
+        f"{len(again)} seed 0 cells of the main grid run again: largest relative "
+        f"change of the conditional KL {max(change):.1e}",
+        "L-BFGS iterations used (of the cap): " + ", ".join(used),
+    ]
+
+
+def denoiser_facts(report: dict, baseline: dict | None = None) -> list[str]:
     """Derived numbers quoted in the README."""
     reference = report["exact_sampler_kl"]
     runs = report["runs"]
@@ -316,6 +427,11 @@ def denoiser_facts(report: dict) -> list[str]:
             )
         if changes:
             facts.append(f"{check}, largest change factor {max(changes):.1f}")
+    facts += paired_facts(report)
+    if baseline:
+        facts += plug_in_facts(report, baseline)
+    if report.get("budget_rerun"):
+        facts += rerun_facts(report)
     return facts
 
 
@@ -381,11 +497,14 @@ def main() -> None:
         print(equal_count_table(report, "markov", 6, 3), "\n")
         print("### derived numbers\n")
         print("\n".join(f"- {line}" for line in sampler_facts(report)), "\n")
+    baseline_path = RESULTS / "baseline.json"
+    baseline = json.loads(baseline_path.read_text()) if baseline_path.exists() else {}
     for law in ("markov", "potts"):
         path = RESULTS / f"denoiser_{law}.json"
         if not path.exists():
             continue
         report = json.loads(path.read_text())
+        plug_in = baseline.get(law)
         steps = report["config"]["sampler_steps"]
         print(f"## denoiser, {report['law']['name']} ({run_note(report)})\n")
         print(
@@ -394,10 +513,13 @@ def main() -> None:
             f"exact K = {steps} sampler KL {sci(report['exact_sampler_kl'])}\n"
         )
         print("### conditional KL (mean over seeds)\n")
-        print(denoiser_table(report, "cond_kl"), "\n")
+        print(denoiser_table(report, "cond_kl", plug_in), "\n")
         print(spread(report), "\n")
         print(f"### sampler KL at K = {steps} (mean over seeds)\n")
-        print(denoiser_table(report, "sampler_kl"), "\n")
+        print(denoiser_table(report, "sampler_kl", plug_in), "\n")
+        if plug_in:
+            print("### training loss above its minimum, relative (mean over seeds)\n")
+            print(train_gap_table(report, plug_in), "\n")
         print("### log-log slope of the conditional KL against n\n")
         print(slope_by_decade(report), "\n")
         print("### width at which the error stops improving\n")
@@ -405,7 +527,7 @@ def main() -> None:
         print("### neighbouring widths, paired by seed\n")
         print(paired_widths(report), "\n")
         print("### derived numbers\n")
-        print("\n".join(f"- {line}" for line in denoiser_facts(report)), "\n")
+        print("\n".join(f"- {line}" for line in denoiser_facts(report, plug_in)), "\n")
         if report["budget_check"]:
             print("### budget check, exact trainer (L-BFGS iterations)\n")
             print(budget_table(report, "budget_check", "runs"), "\n")
