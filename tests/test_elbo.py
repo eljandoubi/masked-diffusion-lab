@@ -3,17 +3,11 @@ from math import comb
 
 import numpy as np
 import pytest
+from helpers import integrand, random_table
 
 from maskdiff.elbo import negative_elbo, pattern_weights
 from maskdiff.laws import markov_chain, potts_ring, sequences
 from maskdiff.partial import conditional_table, partial_marginals, state_index
-
-
-def random_table(length, vocab, seed):
-    """Positive conditionals that do not come from any joint law."""
-    rng = np.random.default_rng(seed)
-    raw = rng.random(((vocab + 1) ** length, length, vocab)) + 0.1
-    return raw / raw.sum(axis=-1, keepdims=True)
 
 
 def test_pattern_weights_are_beta_integrals():
@@ -43,19 +37,10 @@ def test_closed_form_equals_the_pattern_sum_integrated_over_t():
     x = sequences(length, vocab)
     for index in np.random.default_rng(1).integers(0, len(x), size=25):
         seq = x[index]
-        value = 0.0
-        for t, weight in zip(nodes, weights, strict=True):
-            inner = 0.0
-            for mask in itertools.product([0, 1], repeat=length):
-                m = sum(mask)
-                if m == 0:
-                    continue
-                state = state_index(np.where(mask, vocab, seq), vocab)
-                loss = sum(
-                    -np.log(table[state, i, seq[i]]) for i in range(length) if mask[i]
-                )
-                inner += t**m * (1 - t) ** (length - m) * loss
-            value += weight * inner / t
+        value = sum(
+            weight * integrand(table, seq, t, vocab)
+            for t, weight in zip(nodes, weights, strict=True)
+        )
         assert elbo.reshape(-1)[index] == pytest.approx(value, rel=1e-12)
 
 
