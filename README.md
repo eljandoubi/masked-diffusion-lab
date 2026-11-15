@@ -79,7 +79,7 @@ Equal groups are better for weak and moderate dependence, and worse for the stro
 
 A two-hidden-layer MLP (ReLU, width 16, 32, 64 or 128) reads the one-hot code of a partial sequence, with the mask as an extra symbol, and returns one distribution per position. It is trained on $n$ sequences drawn from the data law, $n$ from 200 to 200000, with 3 seeds (the seed fixes the sample and the initialisation). The loss is the masked cross-entropy of section 1: $t$ uniform, mask rate $t$, weight $1/\max(t, 0.05)$. The main grid evaluates the expectation over $t$ and the mask pattern exactly, as a weighted cross-entropy on the 3367 partial sequences that hold a mask, and minimises it full batch with L-BFGS for 2000 iterations. A trainer that samples $t$ and the masks (Adam, batch 2048, 12000 steps) is in the library and ran on a sub-grid, see below.
 
-Two errors, both exact. The conditional KL: draw $t$ uniformly and a mask pattern from the forward process, then average the KL between the true and the learned conditional over the masked positions (the ELBO gap divided by $L + 1$). And the KL of the K = 16 sampler that runs on the learned conditionals. Law: Markov chain with persistence 0.8, $L = 6$, $V = 3$ (entropy 3.524, total correlation 3.068). With the exact conditionals the K = 16 sampler has KL 1.751e-02. Everything below is in `results/denoiser_markov.json`.
+Two errors, both exact. The conditional KL: draw $t$ uniformly and a mask pattern from the forward process, then average the KL between the true and the learned conditional over the masked positions (the ELBO gap divided by $L + 1$). And the KL of the K = 16 sampler that runs on the learned conditionals. Law: Markov chain with persistence 0.8, $L = 6$, $V = 3$ (entropy 3.524, total correlation 3.068). With the exact conditionals the K = 16 sampler has KL 1.751e-02, called the exact-conditional value below. Everything below, up to the second law, is in `results/denoiser_markov.json`.
 
 Conditional KL, mean over 3 seeds (the seed to seed standard deviation over the mean is 0.14 in the median cell and 0.50 at most):
 
@@ -129,7 +129,7 @@ What the numbers show:
 - With few sequences, wider is worse. For $n \le 2000$ the error grows with width (n = 200: 8.8e-2 at width 16, 3.3e-1 at width 128), and at $n = 5000$ widths 16 and 32 tie. There is no regularisation and no early stopping, which is consistent with the wide networks interpolating the few training sequences.
 - Over the whole range of $n$ the fits give slopes -1.06, -1.19 and -1.20 for widths 32, 64 and 128. They include the small-data regime, so they are not a large-sample rate: in the last window ($n$ from $2 \cdot 10^4$ to $2 \cdot 10^5$) the slopes are -0.76, -1.05 and -1.16, so width 32 has flattened while widths 64 and 128 still fall at about $n^{-1}$. Width 16 flattens near 1e-3 (slope -0.21 in the last window), where its 2000 iterations are also not enough, see the budget table.
 - Width at which the error stops improving, taken as the smallest width within 10% of the best mean: 16 for $n \le 5000$, 32 for $n$ from $10^4$ to $5 \cdot 10^4$, 64 for $n \ge 10^5$. Width 128 is never the best. At $n = 200000$ widths 64 and 128 differ by 1.0e-4 against 1.2e-4, inside the seed spread.
-- The sampler cannot go below the discretisation floor. With learned conditionals the K = 16 KL never fell below the exact-conditional value 1.751e-02 (smallest ratio over the 120 runs: 1.003). For $n \ge 10^5$ and widths 32 to 128 all 18 runs are within 6.1% of it, so more data does not remove this error and more steps do (section 1). With 200 sequences the sampler KL is 14 to 20 times the floor.
+- The exact-conditional value is a reference, not a floor. With learned conditionals the K = 16 KL never fell below it in these runs (smallest ratio over the 120 runs: 1.003), and for $n \ge 10^5$ and widths 32 to 128 all 18 runs are within 6.1% of it. The training loss is minimised by the exact conditionals, whose K = 16 sampler has this error, so more data did not remove it here while more steps do (section 1). With 200 sequences the sampler KL is 14 to 20 times the exact-conditional value. Other tables can go below it, see section 3.
 
 Sampled $t$ against the exact expectation, mean over 3 seeds (sampled: Adam, batch 2048, 12000 steps; sub-grid of widths 16 and 128):
 
@@ -185,11 +185,29 @@ Log-log slopes against $n$ for the same runs:
 | 64 | -1.31 | -1.19 | -1.10 | -1.20 |
 | 128 | -1.42 | -1.26 | -1.09 | -1.26 |
 
-The picture matches the Markov chain: wider is worse up to $n = 10^4$ (n = 200: 0.15 at width 16, 1.03 at width 128), slopes of -1.1 to -1.3 for widths 32 and above, and width 16 flattens near 1.2e-3. The smallest width within 10% of the best mean is 16 for $n \le 10^4$ and 32 for $n \ge 2 \cdot 10^4$, widths 32 and 64 tie at $n = 200000$, and width 128 is never the best. The $K = 16$ floor is small for this law, so the learned error shows in the sampler: at $n = 200$ its KL is 148 to 388 times the exact-conditional value, at $n = 200000$ it is 1.10, 1.13, 1.24 and 1.95 times that value for widths 32, 64, 128 and 16, and over the 120 runs it never fell below it (smallest ratio 1.065).
+The picture matches the Markov chain: wider is worse up to $n = 10^4$ (n = 200: 0.15 at width 16, 1.03 at width 128), whole-range slopes of -1.1 to -1.3 for widths 32 and above (last window -0.9 to -1.1), and width 16 flattens near 1.2e-3. The smallest width within 10% of the best mean is 16 for $n \le 10^4$ and 32 for $n \ge 2 \cdot 10^4$, widths 32 and 64 tie at $n = 200000$, and width 128 is never the best. The $K = 16$ exact-conditional value is small for this law, so the learned error shows in the sampler: at $n = 200$ its KL is 148 to 388 times that value, at $n = 200000$ it is 1.10, 1.13, 1.24 and 1.95 times that value for widths 32, 64, 128 and 16, and none of the 120 runs fell below it (smallest ratio 1.065).
 
 ![Conditional KL and sampler KL against the number of training sequences, Potts ring](results/denoiser_potts.png)
 
 Solid lines: exact-expectation training, band = range over seeds. There are no sampled-$t$ runs for this law. Dashed line: sampler KL with exact conditionals.
+
+### 3. Other conditionals can beat the exact ones
+
+The training loss is minimised by the exact conditionals, but the error of the K-step sampler is another function of the conditionals. Tokens that share a step are drawn independently, which weakens the dependence of the output, and conditionals with a little more dependence can offset that. Target: the Markov chain with persistence 0.8 ($L = 6$, $V = 3$). The K = 16 sampler runs on the exact conditionals of the chain with persistence $\rho'$ (`scripts/compensation.py`, `results/compensation.json`):
+
+| $\rho'$ | conditional KL | K = 16 sampler KL | over the exact-conditional value |
+|---|---|---|---|
+| 0.80 (exact) | 0 | 1.751e-02 | 1.000 |
+| 0.81 | 1.414e-04 | 1.161e-02 | 0.663 |
+| 0.82 | 5.830e-04 | 7.135e-03 | 0.408 |
+| 0.84 | 2.491e-03 | 2.875e-03 | 0.164 |
+| 0.86 | 6.037e-03 | 5.815e-03 | 0.332 |
+| 0.88 | 1.168e-02 | 1.744e-02 | 0.996 |
+| 0.90 | 2.014e-02 | 3.987e-02 | 2.277 |
+
+At $\rho' = 0.81$ the conditional KL is 1.414e-04, in the range of the learned errors of widths 32 to 128 at $n \ge 10^5$ (1.0e-04 to 2.4e-04), and the sampler KL is 34% below the exact-conditional value. It is smallest at $\rho' = 0.84$ and is 2.3 times the exact-conditional value at $\rho' = 0.9$. For two positions ($V = 2$, persistence 0.4, K = 16) the effect is exact: the conditionals of persistence $0.4 / (1 - 1/16) = 0.4267$, with conditional KL 1.436e-04, give a sampler output equal to the data law (largest difference 1.1e-16), while the exact conditionals give KL 3.664e-04 (`docs/derivations.md`, part 4, and `tests/test_compensation.py`).
+
+So the exact-conditional value is a reference for section 2, not a lower bound: a learned table can fall below it. None of the 120 runs of section 2 did.
 
 ## What is in the repo
 
@@ -201,13 +219,13 @@ src/maskdiff/sampler.py       exact K-step sampler law (dynamic program), Monte 
 src/maskdiff/asymptotics.py   tie probability and the large-K coefficient
 src/maskdiff/metrics.py       KL, log-log slope, exact error of model conditionals
 src/maskdiff/denoiser.py      MLP denoiser, exact-expectation and sampled-t training
-scripts/                      sampler_error.py, denoiser_study.py, report.py
+scripts/                      sampler_error.py, denoiser_study.py, compensation.py, report.py
 tests/                        the checks listed below, 10 to 20 s on a laptop
 results/                      the JSON and PNG files that the tables above come from
 docs/derivations.md           the derivations
 ```
 
-The tests check, among others: enumerated laws sum to 1; the forward masking rate is $t$; the closed-form negative ELBO against the pattern sum integrated over $t$ and against the average over orderings, and its equality with $-\log p(x)$ for exact conditionals; the sampler law sums to 1, equals the data law for product laws and for one position per step, equals the product of marginals at K = 1, equals an explicit sum over reveal steps, and matches $10^6$ simulated sequences; the discrete-time ELBO of the sampler against its Riemann sum and against $\log q_K$; the large-K coefficient against the program up to K = 2048; the training loss against its exact expectation; the exact error measures against explicit sums.
+The tests check, among others: enumerated laws sum to 1; the forward masking rate is $t$; the closed-form negative ELBO against the pattern sum integrated over $t$ and against the average over orderings, and its equality with $-\log p(x)$ for exact conditionals; the sampler law sums to 1, equals the data law for product laws and for one position per step, equals the product of marginals at K = 1, equals an explicit sum over reveal steps, and matches $10^6$ simulated sequences; the discrete-time ELBO of the sampler against its Riemann sum and against $\log q_K$; the large-K coefficient against the program up to K = 2048; the training loss against its exact expectation; the exact error measures against explicit sums; conditionals that beat the exact ones, with a closed form for two positions.
 
 ## Reproduce
 
@@ -220,6 +238,7 @@ pytest -q
 python scripts/sampler_error.py                                   # about 3 min, writes results/sampler_error.*
 python scripts/denoiser_study.py --law markov --workers 5         # about 25 min with 5 workers
 python scripts/denoiser_study.py --law potts --workers 5 --skip-sampled --skip-checks   # about 12 min
+python scripts/compensation.py                                    # a few seconds, writes results/compensation.json
 python scripts/report.py                                          # prints the tables of this page
 ```
 
@@ -238,7 +257,7 @@ The times are from a laptop that other jobs were using (load average 4.5, 10.7 a
 - No validation set and no early stopping, and the exact error is not used for any choice except the training method just described. The data law is the test.
 - "Width at which the error stops improving": the smallest width whose mean error over the 3 seeds is within 10% of the best width at that $n$. Slopes are fitted to the means over seeds on the stated ranges of $n$.
 
-Derivations in six lines (`docs/derivations.md`):
+Derivations in seven lines (`docs/derivations.md`):
 
 1. The negative ELBO with the linear schedule is $\int_0^1 \frac{1}{t}\,\mathbb{E}[\text{masked cross-entropy}]\,dt = \sum_{M \neq \emptyset} \frac{(|M|-1)!\,(L-|M|)!}{L!} \sum_{i \in M} -\log q_i(x^i \mid x_{M^c})$, the chain-rule loss averaged over orderings.
 2. Its minimiser is the exact conditional of each masked token given the unmasked ones. With exact conditionals it equals $-\log p(x)$ for every $x$, and in general the expected loss is $H(p)$ plus a weighted conditional KL.
@@ -246,15 +265,16 @@ Derivations in six lines (`docs/derivations.md`):
 4. If no two positions share a step, or if one position is revealed per step in random order, the output law is the data law.
 5. The law is $(1-\epsilon_K)\,p + \epsilon_K\, r_K$ with $\epsilon_K \le L(L-1)/(2K)$, so $\mathrm{KL} = O(K^{-2})$.
 6. The leading term is $c/K^2$ with $c$ built from pairwise pointwise mutual information given random subsets (formula (5)), and the exact program reproduces it up to K = 2048.
+7. The exact conditionals minimise the loss in 2, not the K-step KL. For two positions the sampler on the conditionals of the chain with persistence $\rho'$ outputs the chain with persistence $\rho'(1 - 1/K)$, so $\rho' = \rho/(1 - 1/K)$ gives the data law exactly (part 4).
 
 ## Limits
 
 - Sequences have length 6 or 8 over 2 or 3 symbols and the laws are two simple families. Nothing here says how the numbers move for long sequences, large alphabets or real data.
 - The sampler analysis covers the uniform time grid with independent reveals, and equal groups in random order. Other schedules, confidence-based ordering and remasking samplers are not studied. The formula for $c$ needs $p > 0$ and is checked numerically, not proved beyond the $O(K^{-2})$ bound.
-- The denoiser results come from one architecture family, one loss weighting, 3 seeds and no regularisation. Slopes are fits to 3-seed means with a seed to seed spread of up to 50%, so differences of 0.1 in slope mean little. These are measurements on small cases, not a theorem.
-- The training length matters. Tripling it moved single-seed errors by up to a factor 2.2, and wide networks fit the sampling noise of the training sequences longer, so the small-$n$ numbers describe the stated budget and not the best possible training.
-- The main grid uses the exact expectation of the loss, not sampled $t$. The sampled-$t$ trainer ran on 2 widths and 4 sample sizes and gave errors that differ from the exact one by up to a factor 3.2, so the quantitative values depend on the training recipe.
-- The Potts law was run with the exact trainer only, without budget checks.
+- The denoiser results come from one architecture family, one loss weighting, 3 seeds and no regularisation. Slopes are descriptive fits to 3-seed means with a seed to seed spread of up to 50%, so differences of 0.1 in slope mean little. These are measurements on small cases, not a theorem.
+- The training recipe matters. Tripling the training length moved single-seed errors by up to a factor 2.2, in both directions depending on width, $n$ and trainer. The main grid uses the exact expectation of the loss, and the sampled-$t$ trainer (2 widths, 4 sample sizes) differs from it by up to a factor 3.2. The numbers describe the stated recipe and budget, not the best possible training.
+- The recipe was chosen on the Markov law after looking at its exact error (earlier probes are not in the repo), and the Potts law reuses it with the exact trainer only and no budget checks, so this is an exploratory study, not a confirmation. There is no non-neural baseline, such as smoothed empirical conditional frequencies, to separate sampling noise from approximation and optimisation error.
+- The exact-conditional value of the sampler is a reference, not a lower bound (section 3). The statements that learned samplers stay above it describe these runs only.
 
 ## License
 
