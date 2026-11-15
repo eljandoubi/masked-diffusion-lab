@@ -19,12 +19,12 @@ import torch
 
 from maskdiff.denoiser import model_table, train_exact, train_sampled
 from maskdiff.laws import (
-    draw,
     empirical_law,
     entropy,
     markov_chain,
     potts_ring,
     total_correlation,
+    training_sample,
 )
 from maskdiff.metrics import Reference
 
@@ -58,7 +58,7 @@ def run_job(job: tuple[str, str, int, int, int, int]) -> dict:
     trainer, law, width, n, seed, budget = job
     torch.set_num_threads(1)
     ref = reference(law)
-    data = draw(ref.law, n, np.random.default_rng([seed, n]))
+    data = training_sample(ref.law, n, seed)
     start = time.time()
     if trainer == "exact":
         empirical = empirical_law(data, VOCAB)

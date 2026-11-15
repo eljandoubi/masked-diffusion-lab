@@ -14,6 +14,11 @@ def draw(p: np.ndarray, size: int, rng: np.random.Generator) -> np.ndarray:
     return np.stack(np.unravel_index(index, p.shape), axis=1)
 
 
+def training_sample(p: np.ndarray, n: int, seed: int) -> np.ndarray:
+    """The n sequences of one study run: the pair (seed, n) fixes the sample."""
+    return draw(p, n, np.random.default_rng([seed, n]))
+
+
 def empirical_law(data: np.ndarray, vocab: int) -> np.ndarray:
     """Relative frequencies of the rows of data (n, L), shape (V,) * L."""
     shape = (vocab,) * data.shape[1]

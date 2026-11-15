@@ -11,6 +11,7 @@ from maskdiff.laws import (
     product_of_marginals,
     sequences,
     total_correlation,
+    training_sample,
 )
 
 
@@ -108,3 +109,13 @@ def test_draw_returns_sequences_with_the_law_as_frequencies():
     assert x.shape == (size, 4) and x.min() == 0 and x.max() == 2
     freq = np.bincount(np.ravel_multi_index(x.T, p.shape), minlength=p.size) / size
     assert np.abs(freq - p.reshape(-1)).max() < 5 * np.sqrt(p.max() / size)
+
+
+def test_the_seed_and_the_size_fix_the_training_sample():
+    p = markov_chain(6, 3, 0.8)
+    first = training_sample(p, 500, 1)
+    assert (training_sample(p, 500, 1) == first).all()
+    assert not (training_sample(p, 500, 2) == first).all()
+    assert (training_sample(p, 600, 1)[:500] != first).any()
+    expected = draw(p, 500, np.random.default_rng([1, 500]))
+    assert (first == expected).all()
