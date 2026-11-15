@@ -72,7 +72,7 @@ The fraction inside is $e^{-\mathrm{pmi}}$ for the pointwise mutual information 
 
 ## 4. The exact conditionals do not minimise the K-step error
 
-Part 2 shows that the exact conditionals minimise the training loss. The error of the sampler is another function of the conditionals and has another minimiser. Take $L = 2$, $V = 2$ and let $p_\rho$ be the Markov chain with persistence $\rho$. Its marginals are uniform and $p_\rho = \rho\, d + (1-\rho)\, u$, where $d$ puts mass $1/2$ on each of the two sequences with equal tokens and $u$ is uniform on the four sequences.
+Part 2 shows that the exact conditionals minimise the expected loss. The error of the sampler is another function of the conditionals and has another minimiser. Take $L = 2$, $V = 2$ and let $p_\rho$ be the Markov chain with persistence $\rho$. Its marginals are uniform and $p_\rho = \rho\, d + (1-\rho)\, u$, where $d$ puts mass $1/2$ on each of the two sequences with equal tokens and $u$ is uniform on the four sequences.
 
 Give the sampler of Part 3 the exact conditionals of $p_{\rho'}$. The two reveal steps differ with probability $1 - 1/K$, and then (4) is the chain rule, so the output is $p_{\rho'}$. With probability $1/K$ they coincide and the output is the product of the marginals, which is $u$. Hence
 

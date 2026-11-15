@@ -129,7 +129,7 @@ What the numbers show:
 - With few sequences, wider is worse. For $n \le 2000$ the error grows with width (n = 200: 8.8e-2 at width 16, 3.3e-1 at width 128), and at $n = 5000$ widths 16 and 32 tie. There is no regularisation and no early stopping, which is consistent with the wide networks interpolating the few training sequences.
 - Over the whole range of $n$ the fits give slopes -1.06, -1.19 and -1.20 for widths 32, 64 and 128. They include the small-data regime, so they are not a large-sample rate: in the last window ($n$ from $2 \cdot 10^4$ to $2 \cdot 10^5$) the slopes are -0.76, -1.05 and -1.16, so width 32 has flattened while widths 64 and 128 still fall at about $n^{-1}$. Width 16 flattens near 1e-3 (slope -0.21 in the last window), where its 2000 iterations are also not enough, see the budget table.
 - Width at which the error stops improving, taken as the smallest width within 10% of the best mean: 16 for $n \le 5000$, 32 for $n$ from $10^4$ to $5 \cdot 10^4$, 64 for $n \ge 10^5$. Width 128 is never the best. At $n = 200000$ widths 64 and 128 differ by 1.0e-4 against 1.2e-4, inside the seed spread.
-- The exact-conditional value is a reference, not a floor. With learned conditionals the K = 16 KL never fell below it in these runs (smallest ratio over the 120 runs: 1.003), and for $n \ge 10^5$ and widths 32 to 128 all 18 runs are within 6.1% of it. The training loss is minimised by the exact conditionals, whose K = 16 sampler has this error, so more data did not remove it here while more steps do (section 1). With 200 sequences the sampler KL is 14 to 20 times the exact-conditional value. Other tables can go below it, see section 3.
+- The exact-conditional value is a reference, not a floor. With learned conditionals the K = 16 KL never fell below it in these runs (smallest ratio over the 120 runs: 1.003), and for $n \ge 10^5$ and widths 32 to 128 all 18 runs are within 6.1% of it. The loss that more data approaches, its expectation over the data law, is minimised by the exact conditionals, whose K = 16 sampler has this error, so more data did not remove it here while more steps do (section 1). With 200 sequences the sampler KL is 14 to 20 times the exact-conditional value. Other tables can go below it, see section 3.
 
 Sampled $t$ against the exact expectation, mean over 3 seeds (sampled: Adam, batch 2048, 12000 steps; sub-grid of widths 16 and 128):
 
@@ -193,7 +193,7 @@ Solid lines: exact-expectation training, band = range over seeds. There are no s
 
 ### 3. Other conditionals can beat the exact ones
 
-The training loss is minimised by the exact conditionals, but the error of the K-step sampler is another function of the conditionals. Tokens that share a step are drawn independently, which weakens the dependence of the output, and conditionals with a little more dependence can offset that. Target: the Markov chain with persistence 0.8 ($L = 6$, $V = 3$). The K = 16 sampler runs on the exact conditionals of the chain with persistence $\rho'$ (`scripts/compensation.py`, `results/compensation.json`):
+The expected loss is minimised by the exact conditionals, but the error of the K-step sampler is another function of the conditionals. Tokens that share a step are drawn independently, which weakens the dependence of the output, and conditionals with a little more dependence can offset that. Target: the Markov chain with persistence 0.8 ($L = 6$, $V = 3$). The K = 16 sampler runs on the exact conditionals of the chain with persistence $\rho'$ (`scripts/compensation.py`, `results/compensation.json`):
 
 | $\rho'$ | conditional KL | K = 16 sampler KL | over the exact-conditional value |
 |---|---|---|---|
@@ -205,7 +205,7 @@ The training loss is minimised by the exact conditionals, but the error of the K
 | 0.88 | 1.168e-02 | 1.744e-02 | 0.996 |
 | 0.90 | 2.014e-02 | 3.987e-02 | 2.277 |
 
-At $\rho' = 0.81$ the conditional KL is 1.414e-04, in the range of the learned errors of widths 32 to 128 at $n \ge 10^5$ (1.0e-04 to 2.4e-04), and the sampler KL is 34% below the exact-conditional value. It is smallest at $\rho' = 0.84$ and is 2.3 times the exact-conditional value at $\rho' = 0.9$. For two positions ($V = 2$, persistence 0.4, K = 16) the effect is exact: the conditionals of persistence $0.4 / (1 - 1/16) = 0.4267$, with conditional KL 1.436e-04, give a sampler output equal to the data law (largest difference 1.1e-16), while the exact conditionals give KL 3.664e-04 (`docs/derivations.md`, part 4, and `tests/test_compensation.py`).
+At $\rho' = 0.81$ the conditional KL is 1.414e-04, in the range of the learned errors of widths 32 to 128 at $n \ge 10^5$ (3-seed means 1.0e-04 to 2.4e-04), and the sampler KL is 34% below the exact-conditional value. Among these values it is smallest at $\rho' = 0.84$ and it is 2.3 times the exact-conditional value at $\rho' = 0.9$. For two positions ($V = 2$, persistence 0.4, K = 16) the effect is exact: the conditionals of persistence $0.4 / (1 - 1/16) = 0.4267$, with conditional KL 1.436e-04, give a sampler output equal to the data law (largest difference 1.1e-16), while the exact conditionals give KL 3.664e-04 (`docs/derivations.md`, part 4, and `tests/test_compensation.py`).
 
 So the exact-conditional value is a reference for section 2, not a lower bound: a learned table can fall below it. None of the 120 runs of section 2 did.
 
@@ -265,7 +265,7 @@ Derivations in seven lines (`docs/derivations.md`):
 4. If no two positions share a step, or if one position is revealed per step in random order, the output law is the data law.
 5. The law is $(1-\epsilon_K)\,p + \epsilon_K\, r_K$ with $\epsilon_K \le L(L-1)/(2K)$, so $\mathrm{KL} = O(K^{-2})$.
 6. The leading term is $c/K^2$ with $c$ built from pairwise pointwise mutual information given random subsets (formula (5)), and the exact program reproduces it up to K = 2048.
-7. The exact conditionals minimise the loss in 2, not the K-step KL. For two positions the sampler on the conditionals of the chain with persistence $\rho'$ outputs the chain with persistence $\rho'(1 - 1/K)$, so $\rho' = \rho/(1 - 1/K)$ gives the data law exactly (part 4).
+7. The exact conditionals minimise the expected loss in 2, not the K-step KL. For two positions the sampler on the conditionals of the chain with persistence $\rho'$ outputs the chain with persistence $\rho'(1 - 1/K)$, so $\rho' = \rho/(1 - 1/K)$ gives the data law exactly (part 4).
 
 ## Limits
 
