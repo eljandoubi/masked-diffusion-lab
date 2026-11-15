@@ -64,3 +64,11 @@ def loss_targets(law: np.ndarray, floor: float = 0.0) -> np.ndarray:
         mass = np.broadcast_to(w[masked.sum()] * law.reshape(-1, 1), flat.shape)
         np.add.at(target, flat[:, masked], mass[:, masked])
     return target.reshape(-1, length, vocab)
+
+
+def minimum_loss(law: np.ndarray, floor: float = 0.0) -> float:
+    """Smallest expected loss under law, reached by the normalised loss targets."""
+    target = loss_targets(law, floor)
+    seen = target > 0
+    context = np.broadcast_to(target.sum(axis=-1, keepdims=True), target.shape)
+    return -float((target[seen] * np.log(target[seen] / context[seen])).sum())

@@ -5,11 +5,19 @@ import numpy as np
 import pytest
 from helpers import integrand, random_table
 
-from maskdiff.elbo import loss_targets, negative_elbo, pattern_weights
-from maskdiff.laws import markov_chain, potts_ring, sequences
+from maskdiff.elbo import loss_targets, minimum_loss, negative_elbo, pattern_weights
+from maskdiff.laws import (
+    draw,
+    empirical_law,
+    entropy,
+    markov_chain,
+    potts_ring,
+    sequences,
+)
 from maskdiff.partial import (
     conditional_table,
     partial_marginals,
+    plug_in_table,
     state_digits,
     state_index,
 )
@@ -118,3 +126,25 @@ def test_normalised_loss_targets_are_the_exact_conditionals():
     masked = state_digits(3, 4) == 3
     normalised = target[masked] / target[masked].sum(axis=-1, keepdims=True)
     assert normalised == pytest.approx(table[masked], abs=1e-12)
+
+
+def test_the_smallest_unclipped_loss_is_the_entropy_of_the_law():
+    law = markov_chain(4, 3, 0.7)
+    assert minimum_loss(law) == pytest.approx(entropy(law), rel=1e-12)
+    sparse = empirical_law(draw(law, 300, np.random.default_rng(0)), 3)
+    assert (sparse == 0).any()
+    assert minimum_loss(sparse) == pytest.approx(entropy(sparse), rel=1e-12)
+    assert minimum_loss(sparse, 0.05) < minimum_loss(sparse)
+
+
+def test_the_plug_in_table_reaches_the_smallest_loss_and_other_tables_do_not():
+    length, vocab, floor = 3, 2, 0.05
+    data = draw(markov_chain(length, vocab, 0.6), 5000, np.random.default_rng(1))
+    empirical = empirical_law(data, vocab)
+    best = minimum_loss(empirical, floor)
+    plug_in = plug_in_table(data, vocab, 0.0)
+    reached = (empirical * negative_elbo(plug_in, vocab, length, floor)).sum()
+    assert reached == pytest.approx(best, rel=1e-12)
+    for seed in range(5):
+        table = random_table(length, vocab, seed)
+        assert (empirical * negative_elbo(table, vocab, length, floor)).sum() > best
