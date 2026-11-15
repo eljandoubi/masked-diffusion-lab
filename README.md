@@ -25,7 +25,7 @@ Data laws: a cyclic Potts chain with coupling $\beta$ and a stationary Markov ch
 | 48 | 7.512e-05 | 3.410e-04 | 2.019e-03 |
 | 6 steps, one position per step in random order | < 1e-15 | < 1e-15 | < 1e-15 |
 
-For the product laws ($\beta = 0$ and $\rho = 0$) the KL is zero at every K (below 6e-15, rounding). The Markov chain behaves the same way:
+For the product laws ($\beta = 0$ and $\rho = 0$) the KL is zero at every K (largest $|\mathrm{KL}|$ 5.7e-15, rounding). The Markov chain behaves the same way:
 
 | K | $\rho = 0.5$ | $\rho = 0.8$ | $\rho = 0.95$ |
 |---|---|---|---|
@@ -59,9 +59,9 @@ Log-log slope of KL against K. The required grid ends at K = 48, so the fit uses
 What the numbers show:
 
 - At K = 1 the sampler returns the product of the marginals, and its KL equals the total correlation of the law (largest relative difference over the 12 dependent laws: 7e-15).
-- Revealing one position per step in random order is exact: $|\mathrm{KL}| < 5 \cdot 10^{-16}$ for all 16 laws. The uniform grid with the same 6 steps is far from it, for example 2.093e-02 for $\beta = 1$ and 1.024e-01 for $\rho = 0.8$.
+- Revealing one position per step in random order is exact: the largest $|\mathrm{KL}|$ over the 16 laws is 4.7e-16 (rounding). The uniform grid with the same 6 steps is far from it, for example 2.093e-02 for $\beta = 1$ and 1.024e-01 for $\rho = 0.8$.
 - The error falls like $1/K^2$, not $1/K$. For K from 512 to 2048 the slope is between -1.946 and -2.000. The error of the law itself is $O(1/K)$ and KL is quadratic in it, see formula (5).
-- On the required grid (K 16 to 48) the slope is between -1.74 and -2.00. It is further from -2 for strong dependence because some two of the 6 positions still share a step with probability 0.656 at K = 16 and 0.278 at K = 48.
+- On the required grid (K 16 to 48) the slope is between -1.74 and -2.00, and it is further from -2 for strong dependence. The chance that some two of the 6 positions share a step (0.656 at K = 16, 0.278 at K = 48) is the same for every law, so it sets the scale of the correction but not its size between laws. The size comes from the $O(1/K)$ term, whose constant grows with the dependence.
 - $K^2\,\mathrm{KL}$ at K = 2048 is within 0.4% of $c$ for ten of the twelve laws, and within 3.7% (L = 6) and 2.0% (L = 8) for Markov 0.95, where the $O(1/K)$ corrections have a large constant.
 
 Equal-size groups in random order, with K dividing L, against the uniform grid at the same K (L = 6, V = 3, KL in nats):
@@ -77,9 +77,9 @@ Equal groups are better for weak and moderate dependence, and worse for the stro
 
 ### 2. Learned denoiser
 
-A two-hidden-layer MLP (ReLU, width 16, 32, 64 or 128) reads the one-hot code of a partial sequence, with the mask as an extra symbol, and returns one distribution per position. It is trained on $n$ sequences drawn from the data law, $n$ from 200 to 200000, with 3 seeds (the seed fixes the sample and the initialisation). The loss is the masked cross-entropy of section 1: $t$ uniform, mask rate $t$, weight $1/\max(t, 0.05)$. The main grid evaluates the expectation over $t$ and the mask pattern exactly, as a weighted cross-entropy on the 3367 partial sequences that hold a mask, and minimises it full batch with L-BFGS for 2000 iterations. A trainer that samples $t$ and the masks (Adam, batch 2048, 12000 steps) is in the library and ran on a sub-grid, see below.
+A two-hidden-layer MLP (ReLU, width 16, 32, 64 or 128) reads the one-hot code of a partial sequence, with the mask as an extra symbol, and returns one distribution per position. It is trained on $n$ sequences drawn from the data law, $n$ from 200 to 200000, with 3 seeds (the seed fixes the sample and the initialisation). The training loss is the masked cross-entropy derived in `docs/derivations.md` (parts 1 and 2): $t$ uniform, mask rate $t$, weight $1/\max(t, 0.05)$. The main grid takes its expectation over $t$ and the mask pattern exactly, and over the sequences under the empirical law of the $n$ training sequences, so it is a weighted cross-entropy on the 3367 partial sequences that hold a mask. It is minimised full batch with L-BFGS for at most 2000 iterations, and its minimiser is the plug-in conditional frequency of the training sequences (`elbo.minimum_loss` is the loss there). A trainer that samples $t$ and the masks (Adam, batch 2048, 12000 steps) is in the library and ran on a sub-grid, see below.
 
-Two errors, both exact. The conditional KL: draw $t$ uniformly and a mask pattern from the forward process, then average the KL between the true and the learned conditional over the masked positions (the ELBO gap divided by $L + 1$). And the KL of the K = 16 sampler that runs on the learned conditionals. Law: Markov chain with persistence 0.8, $L = 6$, $V = 3$ (entropy 3.524, total correlation 3.068). With the exact conditionals the K = 16 sampler has KL 1.751e-02, called the exact-conditional value below. Everything below, up to the second law, is in `results/denoiser_markov.json`.
+Two errors, both exact. The conditional KL: draw $t$ uniformly and a mask pattern from the forward process, then average the KL between the true and the learned conditional over the masked positions (the ELBO gap divided by $L + 1$). And the KL of the K = 16 sampler that runs on the learned conditionals. Both use the unclipped ELBO weights, while training uses the clipped weight, so the training loss is not the ELBO for $t$ below 0.05. As a non-neural reference, the plug-in table holds the conditional frequencies of the same $n$ training sequences with $\alpha$ added to every count (contexts that no sequence reaches get uniform conditionals). $\alpha$ = 0.01, 0.1 and 1 were fixed before any run, all three are reported, and none was chosen on the errors (`scripts/baseline.py`, `results/baseline.json`). Law: Markov chain with persistence 0.8, $L = 6$, $V = 3$ (entropy 3.524, total correlation 3.068). With the exact conditionals the K = 16 sampler has KL 1.751e-02, called the exact-conditional value below. Everything below, up to the second law, is in `results/denoiser_markov.json` and `results/baseline.json`.
 
 Conditional KL, mean over 3 seeds (the seed to seed standard deviation over the mean is 0.14 in the median cell and 0.50 at most):
 
