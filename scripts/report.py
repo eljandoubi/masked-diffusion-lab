@@ -196,6 +196,88 @@ def run_note(report: dict) -> str:
     return f"wall {report['wall_seconds']:.0f} s, load {report['load_average']:.1f}"
 
 
+def sampler_facts(report: dict) -> list[str]:
+    """Derived numbers quoted in the README."""
+    cases = report["cases"]
+    dependent = [c for c in cases if c["total_correlation"] > 1e-9]
+    last = report["extended_grid"][-1]
+    relative = max(
+        abs(c["kl"][0] - c["total_correlation"]) / c["total_correlation"]
+        for c in dependent
+    )
+    product = max(
+        abs(v) for c in cases if c["total_correlation"] <= 1e-9 for v in c["kl"]
+    )
+    ratio = [c["kl_extended"][-1] * last**2 / c["coefficient"] for c in dependent]
+    k16, k48 = report["grid"].index(16), report["grid"].index(48)
+    six = next(c for c in dependent if c["length"] == 6)
+    one_step = max(abs(c["one_at_a_time"]) for c in cases)
+    return [
+        f"K = 1 against the total correlation, largest relative gap {relative:.1e}",
+        f"one position per step, largest |KL| {one_step:.1e}",
+        f"product laws, largest |KL| over the grid {product:.1e}",
+        f"K^2 KL at K = {last} over c: {min(ratio):.3f} to {max(ratio):.3f}",
+        f"tie probability, L = 6: {six['tie_probability'][k16]:.3f} at K = 16, "
+        f"{six['tie_probability'][k48]:.3f} at K = 48",
+    ]
+
+
+def denoiser_facts(report: dict) -> list[str]:
+    """Derived numbers quoted in the README."""
+    floor = report["exact_sampler_kl"]
+    runs = report["runs"]
+    ratio = [r["sampler_kl"] / floor for r in runs]
+    wide = [
+        r["sampler_kl"] / floor for r in runs if r["n"] >= 100000 and r["width"] >= 32
+    ]
+    widths = report["config"]["widths"]
+
+    def mean_ratio(n: int) -> list[str]:
+        means = [
+            np.mean([r["sampler_kl"] for r in runs if (r["n"], r["width"]) == (n, w)])
+            for w in widths
+        ]
+        return [f"{m / floor:.2f}" for m in means]
+
+    facts = [
+        f"sampler KL over the exact-conditional value, {len(runs)} runs: "
+        f"smallest {min(ratio):.3f}",
+        f"n >= 100000, widths 32 to 128, {len(wide)} runs: "
+        f"{min(wide):.3f} to {max(wide):.3f}",
+        f"mean ratio by width {widths} at n = 200: {mean_ratio(200)}",
+        f"mean ratio by width {widths} at n = 200000: {mean_ratio(200000)}",
+    ]
+    if report["sampled_runs"]:
+        exact = cell_values(report, "cond_kl")
+        sampled = cell_values(report, "cond_kl", "sampled_runs")
+        factor = max(
+            max(
+                exact[c].mean() / sampled[c].mean(), sampled[c].mean() / exact[c].mean()
+            )
+            for c in sampled
+        )
+        facts.append(f"exact against sampled trainer, largest factor {factor:.1f}")
+    for check, base in (
+        ("budget_check", "runs"),
+        ("sampled_budget_check", "sampled_runs"),
+    ):
+        changes = []
+        for run in report[check]:
+            first = next(
+                r
+                for r in report[base]
+                if (r["width"], r["n"], r["seed"]) == (run["width"], run["n"], 0)
+            )
+            changes.append(
+                max(
+                    run["cond_kl"] / first["cond_kl"], first["cond_kl"] / run["cond_kl"]
+                )
+            )
+        if changes:
+            facts.append(f"{check}, largest change factor {max(changes):.1f}")
+    return facts
+
+
 def main() -> None:
     path = RESULTS / "sampler_error.json"
     if path.exists():
@@ -212,6 +294,8 @@ def main() -> None:
         print(equal_count_table(report, "potts", 6, 3), "\n")
         print("### equal counts, markov L = 6\n")
         print(equal_count_table(report, "markov", 6, 3), "\n")
+        print("### derived numbers\n")
+        print("\n".join(f"- {line}" for line in sampler_facts(report)), "\n")
     for law in ("markov", "potts"):
         path = RESULTS / f"denoiser_{law}.json"
         if not path.exists():
@@ -233,6 +317,8 @@ def main() -> None:
         print(slope_by_decade(report), "\n")
         print("### width at which the error stops improving\n")
         print(plateau_widths(report), "\n")
+        print("### derived numbers\n")
+        print("\n".join(f"- {line}" for line in denoiser_facts(report)), "\n")
         if report["budget_check"]:
             print("### budget check, exact trainer (L-BFGS iterations)\n")
             print(budget_table(report, "budget_check", "runs"), "\n")
