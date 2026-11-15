@@ -256,20 +256,20 @@ So the exact-conditional value is a reference for section 2, not a lower bound: 
 ## What is in the repo
 
 ```
-src/maskdiff/laws.py          data laws (Markov chain, Potts ring), entropy, total correlation
-src/maskdiff/partial.py       partial sequences, exact marginals and conditionals, forward masking
-src/maskdiff/elbo.py          negative ELBO in closed form, clipped weights, expected-loss targets
+src/maskdiff/laws.py          data laws (Markov chain, Potts ring), entropy, total correlation, training samples
+src/maskdiff/partial.py       partial sequences, exact marginals and conditionals, forward masking, plug-in conditionals
+src/maskdiff/elbo.py          negative ELBO in closed form, clipped weights, expected-loss targets, smallest loss
 src/maskdiff/sampler.py       exact K-step sampler law (dynamic program), Monte Carlo sampler
 src/maskdiff/asymptotics.py   tie probability and the large-K coefficient
-src/maskdiff/metrics.py       KL, log-log slope, exact error of model conditionals
+src/maskdiff/metrics.py       KL, log-log slope, paired t interval, exact error of model conditionals
 src/maskdiff/denoiser.py      MLP denoiser, exact-expectation and sampled-t training
-scripts/                      sampler_error.py, denoiser_study.py, compensation.py, report.py
+scripts/                      sampler_error.py, denoiser_study.py, compensation.py, baseline.py, report.py
 tests/                        the checks listed below, 10 to 20 s on a laptop
 results/                      the JSON and PNG files that the tables above come from
 docs/derivations.md           the derivations
 ```
 
-The tests check, among others: enumerated laws sum to 1; the forward masking rate is $t$; the closed-form negative ELBO against the pattern sum integrated over $t$ and against the average over orderings, and its equality with $-\log p(x)$ for exact conditionals; the sampler law sums to 1, equals the data law for product laws and for one position per step, equals the product of marginals at K = 1, equals an explicit sum over reveal steps, and matches $10^6$ simulated sequences; the discrete-time ELBO of the sampler against its Riemann sum and against $\log q_K$; the large-K coefficient against the program up to K = 2048; the training loss against its exact expectation; the exact error measures against explicit sums; conditionals that beat the exact ones, with a closed form for two positions.
+The tests check, among others: enumerated laws sum to 1; the forward masking rate is $t$; the closed-form negative ELBO against the pattern sum integrated over $t$ and against the average over orderings, and its equality with $-\log p(x)$ for exact conditionals; the sampler law sums to 1, equals the data law for product laws and for one position per step, equals the product of marginals at K = 1, equals an explicit sum over reveal steps, and matches $10^6$ simulated sequences; the discrete-time ELBO of the sampler against its Riemann sum and against $\log q_K$; the large-K coefficient against the program up to K = 2048; the training loss against its exact expectation; the exact error measures against explicit sums; the plug-in conditionals against hand-counted tables, and the smallest training loss against the entropy and against the loss of other tables; the paired t interval against its coverage; conditionals that beat the exact ones, with a closed form for two positions.
 
 ## Reproduce
 
@@ -282,24 +282,28 @@ pytest -q
 python scripts/sampler_error.py                                   # about 3 min, writes results/sampler_error.*
 python scripts/denoiser_study.py --law markov --workers 5         # about 25 min with 5 workers
 python scripts/denoiser_study.py --law potts --workers 5 --skip-sampled --skip-checks   # about 12 min
+python scripts/denoiser_study.py --law potts --workers 5 --extend   # about 11 min, adds the sampled-t runs and the budget checks to the Potts json
+python scripts/baseline.py                                        # a few minutes, writes results/baseline.json
 python scripts/compensation.py                                    # a few seconds, writes results/compensation.json
 python scripts/report.py                                          # prints the tables of this page
 ```
 
-The times are from a laptop that other jobs were using (load average 4.5, 10.7 and 22 when the three runs ended). Every training run is seeded and deterministic on one CPU thread, so a rerun gives the same numbers up to floating point.
+The times are from a laptop that other jobs were using (load average 4.5, 10.7, 22 and 11.5 when the sampler study, the Markov study, the Potts grid and the Potts extension ended). Every training run is seeded and deterministic on one CPU thread, so a rerun gives the same numbers up to floating point: the four seed-0 cells of the Potts grid that the extension ran again matched the committed values exactly.
 
 ## Method notes
 
 - Laws. Markov chain: uniform start, a token repeats its predecessor with probability $\rho + (1-\rho)/V$ and moves to each other symbol with probability $(1-\rho)/V$. Potts ring: $p(x) \propto \exp(\beta\,\#\{i : x_i = x_{i+1 \bmod L}\})$, which for $V = 2$ is the Ising ring with coupling $\beta/2$.
 - Forward process: each token is masked with probability $t$ (that is $\alpha_t = 1 - t$). Exact conditionals come from the table of all $(V+1)^L$ partial marginals of the enumerated law.
 - Sampler: step $k$ reveals each masked position with probability $1/(K-k)$, and tokens revealed together are drawn from the conditionals given the partial sequence at the start of the step. A step is a sparse map with $(2V+1)^L$ moves. "One position per step in random order" is $L$ steps, each revealing one uniformly chosen masked position. "Equal groups" reveals $L/K$ uniformly chosen positions per step and is only defined for K dividing L.
-- KL is $\mathrm{KL}(\text{data} \,\|\, \text{sampler})$, computed as $\sum_x p\,\log(1 + (p - q)/q)$ where $|p - q| \le q/2$, which stays accurate for nearby laws, and as $\sum_x p\,(\log p - \log q)$ elsewhere (the first form rounds to $-\infty$ when $q$ is far above $p$). Bins with $p = 0$ do not count, and $q = 0$ where $p > 0$ gives infinity. Values below 1e-14 are rounding.
+- KL is $\mathrm{KL}(\text{data} \,\|\, \text{sampler})$, computed as $\sum_x p\,\log(1 + (p - q)/q)$ where $|p - q| \le q/2$, which stays accurate for nearby laws, and as $\sum_x p\,(\log p - \log q)$ elsewhere (the first form rounds to $-\infty$ when $q$ is far above $p$). Bins with $p = 0$ do not count, and $q = 0$ where $p > 0$ gives infinity. Values below 1e-14 in magnitude are rounding: the largest $|\mathrm{KL}|$ that should be zero is 5.7e-15 (product laws) and 4.7e-16 (one position per step).
 - Slope fits are least squares of $\log \mathrm{KL}$ on $\log K$ over the stated range. The extra grid K = 64 to 2048 is an addition to the required one.
-- Conditional KL: draw $t$ uniformly and a mask pattern from the forward process, then average the KL between the true and the learned conditional over the masked positions. It equals the ELBO gap (expected loss minus entropy) divided by $L + 1$.
+- Conditional KL: draw $t$ uniformly and a mask pattern from the forward process, then average the KL between the true and the learned conditional over the masked positions. It equals the ELBO gap (expected loss minus entropy) divided by $L + 1$. Both use the unclipped weights, while training uses the clipped weight $1/\max(t, 0.05)$.
 - Denoiser: input is the one-hot code of each position over $V + 1$ symbols (the mask is symbol $V$), two hidden ReLU layers of the stated width, output is $L \times V$ logits, one softmax per position. The loss counts masked positions only.
-- Training objective: $t$ uniform, mask rate $t$, weight $1/\max(t, 0.05)$ on $n$ sequences drawn from the data law. The main grid evaluates the expectation over $t$ and the mask pattern exactly and minimises it with L-BFGS (full batch, 2000 iterations, float64), so training has no sampling noise. Earlier runs with sampled $t$ and smaller batches and fewer steps (batch 512, 8000 steps), and a probe at $n = 200000$, were limited by optimisation at large $n$. That is why the main grid uses the exact expectation and why the sampled-$t$ trainer has the settings above (Adam, batch 2048, 12000 steps, learning rate 3e-3 with cosine decay to 3e-5). Those earlier runs are not part of the repo.
-- No validation set and no early stopping, and the exact error is not used for any choice except the training method just described. The data law is the test.
+- Training objective: $t$ uniform, mask rate $t$, weight $1/\max(t, 0.05)$, on $n$ sequences drawn from the data law. The main grid takes the expectation over $t$, the mask pattern and the sequences (their empirical law) exactly and minimises it with L-BFGS (full batch, at most 2000 iterations, float64), so training has no sampling noise. The number of iterations used was not recorded in the two main grids. The 8 Potts runs of the budget check all used their whole cap (2000 and 6000 iterations). The sampled-$t$ trainer is Adam with batch 2048, 12000 steps and learning rate 3e-3 with cosine decay to 3e-5. This recipe was chosen on the Markov law after looking at its exact error, in earlier runs that are not in the repo.
+- Plug-in table: for a partial sequence with a masked position, the count of training sequences that match its known positions and carry the symbol, plus $\alpha$, over the count of those that match plus $V\alpha$. Contexts that no training sequence reaches therefore get uniform conditionals. The smallest value of the training loss is reached by the same table with $\alpha = 0$ on the contexts that occur.
+- No validation set and no early stopping. The exact error was used to choose the training method just described, on the Markov law, and for nothing else; the three $\alpha$ were fixed before any run and none was chosen on the errors. The data law is the test.
 - "Width at which the error stops improving": the smallest width whose mean error over the 3 seeds is within 10% of the best width at that $n$. Slopes are fitted to the means over seeds on the stated ranges of $n$.
+- Paired differences between widths use the same training sample for both widths (the seed and $n$ fix it) and a two-sided 95% t interval with 2 degrees of freedom (quantile 4.303), `maskdiff.metrics.paired_interval`.
 
 Derivations in seven lines (`docs/derivations.md`):
 
@@ -315,9 +319,9 @@ Derivations in seven lines (`docs/derivations.md`):
 
 - Sequences have length 6 or 8 over 2 or 3 symbols and the laws are two simple families. Nothing here says how the numbers move for long sequences, large alphabets or real data.
 - The sampler analysis covers the uniform time grid with independent reveals, and equal groups in random order. Other schedules, confidence-based ordering and remasking samplers are not studied. The formula for $c$ needs $p > 0$ and is checked numerically, not proved beyond the $O(K^{-2})$ bound.
-- The denoiser results come from one architecture family, one loss weighting, 3 seeds and no regularisation. Slopes are descriptive fits to 3-seed means with a seed to seed spread of up to 50%, so differences of 0.1 in slope mean little. These are measurements on small cases, not a theorem.
-- The training recipe matters. Tripling the training length moved single-seed errors by up to a factor 2.2, in both directions depending on width, $n$ and trainer. The main grid uses the exact expectation of the loss, and the sampled-$t$ trainer (2 widths, 4 sample sizes) differs from it by up to a factor 3.2. The numbers describe the stated recipe and budget, not the best possible training.
-- The recipe was chosen on the Markov law after looking at its exact error (earlier probes are not in the repo), and the Potts law reuses it with the exact trainer only and no budget checks, so this is an exploratory study, not a confirmation. There is no non-neural baseline, such as smoothed empirical conditional frequencies, to separate sampling noise from approximation and optimisation error.
+- The denoiser results come from one architecture family, one loss weighting and 3 seeds, and no network is regularised. Slopes are descriptive fits to 3-seed means with a seed to seed spread of up to 50%, so differences of 0.1 in slope mean little, and an interval over 3 seeds is wide (4.3 standard errors). The training recipe matters: tripling the training length moved single-seed errors by up to a factor 2.2 (Markov law, sampled trainer) and 2.1 (Potts law, exact trainer), in both directions depending on width, $n$ and trainer, and the sampled-$t$ trainer (2 widths, 4 sample sizes) differs from the exact expectation by up to a factor 3.2 (Markov) and 2.2 (Potts). The numbers describe the stated recipe and budget, not the best possible training. These are measurements on small cases, not a theorem.
+- The recipe was chosen on the Markov law after looking at its exact error, in earlier runs that are not in the repo, so the Markov numbers are not a confirmation of it. The Potts law was not used for any choice and repeats the trainer and budget comparisons with the same direction in six of eight cells, one seed per cell. Both laws are exploratory.
+- The only non-neural reference is the plug-in table with three fixed smoothing values. No network with weight decay or early stopping was run, and the error on contexts that occur in the training sequences was not separated from the error on contexts that do not, so the cause of the width effect at small $n$ is not isolated.
 - The exact-conditional value of the sampler is a reference, not a lower bound (section 3). The statements that learned samplers stay above it describe these runs only.
 
 ## License
