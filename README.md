@@ -209,7 +209,7 @@ The tests check, among others: enumerated laws sum to 1; the forward masking rat
 
 ## Reproduce
 
-CPU only. Python 3.11 or newer.
+CPU only. Python 3.11 or newer (CI runs 3.11 and 3.12).
 
 ```
 pip install torch --index-url https://download.pytorch.org/whl/cpu
