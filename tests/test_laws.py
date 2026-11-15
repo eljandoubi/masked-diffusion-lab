@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from maskdiff.laws import (
+    draw,
     entropy,
     marginal,
     markov_chain,
@@ -87,3 +88,12 @@ def test_ring_is_invariant_under_a_cyclic_shift():
 
 def test_entropy_of_the_uniform_law():
     assert entropy(np.full(27, 1 / 27)) == pytest.approx(np.log(27))
+
+
+def test_draw_returns_sequences_with_the_law_as_frequencies():
+    p = potts_ring(4, 3, 0.8)
+    size = 400_000
+    x = draw(p, size, np.random.default_rng(0))
+    assert x.shape == (size, 4) and x.min() == 0 and x.max() == 2
+    freq = np.bincount(np.ravel_multi_index(x.T, p.shape), minlength=p.size) / size
+    assert np.abs(freq - p.reshape(-1)).max() < 5 * np.sqrt(p.max() / size)

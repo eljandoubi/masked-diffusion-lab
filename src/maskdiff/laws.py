@@ -8,6 +8,12 @@ def sequences(length: int, vocab: int) -> np.ndarray:
     return np.indices((vocab,) * length).reshape(length, -1).T
 
 
+def draw(p: np.ndarray, size: int, rng: np.random.Generator) -> np.ndarray:
+    """Draw `size` independent sequences from the law p, shape (size, L)."""
+    index = rng.choice(p.size, size=size, p=p.reshape(-1))
+    return np.stack(np.unravel_index(index, p.shape), axis=1)
+
+
 def markov_chain(length: int, vocab: int, persistence: float) -> np.ndarray:
     """Stationary chain with a uniform start; persistence 0 gives the uniform law.
 
