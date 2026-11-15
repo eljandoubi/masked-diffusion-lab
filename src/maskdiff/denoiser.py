@@ -82,11 +82,7 @@ def train_exact(
     iterations: int = 2000,
     floor: float = 0.05,
 ) -> tuple[Denoiser, float]:
-    """L-BFGS on the exact expectation over t and masks of the clipped loss under law.
-
-    The expectation is a weighted cross-entropy on all partial sequences, so a step
-    carries no sampling noise. Returns the model (float64) and its final loss.
-    """
+    """L-BFGS on the exact expectation of the clipped loss under law, full batch."""
     torch.manual_seed(seed)
     length, vocab = law.ndim, law.shape[0]
     digits = state_digits(vocab, length)

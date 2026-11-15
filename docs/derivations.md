@@ -32,6 +32,12 @@ $$\mathbb{E}_{x \sim p}\big[-\mathrm{ELBO}(x)\big] = H(p) + \underbrace{\sum_i \
 
 Any positive weighting of the pairs has the same minimiser, so the clipped weight used in training (Part 3) does not move the optimum, only the trade-off when the model is too small.
 
+**Training on the exact expectation.** Group the terms of (2) by the partial sequence $s$ that a mask pattern produces, with masked set $M(s)$ and known part $x_U$. For any law $\pi$ over sequences, for example the empirical law of $n$ training sequences,
+
+$$\mathbb{E}_{x \sim \pi}\big[-\mathrm{ELBO}(x)\big] = -\sum_{s} w_{|M(s)|} \sum_{i \in M(s)} \sum_{y} \pi(x_U,\, x_i = y)\, \log q_i(y \mid s).$$
+
+This is a weighted cross-entropy on the $(V+1)^L - V^L$ partial sequences that have at least one mask. With the weight $1/\max(t, \text{floor})$ in place of $1/t$, only the numbers $w_m$ change (`pattern_weights(L, floor)`). Training can therefore minimise the expectation over $t$ and the mask pattern exactly instead of sampling them. Normalising the weights over $y$ gives the minimiser: the exact conditionals when $\pi = p$ and the plain conditional frequencies of the training sequences when $\pi$ is empirical (undefined where a context never occurs). `elbo.loss_targets` builds the weights, and `tests/test_elbo.py` checks that they reproduce the expected loss and that they normalise to the exact conditionals.
+
 The error measure of Part 3 is the conditional KL: draw $t$ uniformly, draw the mask pattern from the forward process, and average the KL of (3) over the masked positions of the pattern (zero if none is masked). Since $\int_0^1 t^m (1-t)^{L-m}\, dt \,/\, m = (m-1)!\,(L-m)!/(L+1)!$, it equals the ELBO gap divided by $L + 1$. Both are computed exactly by summing over all $(V+1)^L$ partial sequences (`Reference.conditional_kl`), and `tests/test_reference.py` checks them against the expected loss minus the entropy and against an explicit sum over $t$ and mask patterns.
 
 ## 3. The K-step sampler
@@ -48,7 +54,7 @@ $$q_K(x) = \mathbb{E}_\tau \prod_{i=1}^{L} c_i\big(x_i \mid x_{U(i)}\big). \tag{
 
 **No ties.** If all $\tau_i$ differ, the product in (4) is the chain rule in the order given by $\tau$, so it equals $p(x)$.
 
-**One position per step.** Revealing one uniformly chosen masked position per step (the schedule `random_order_schedule([1] * L, L)`) averages the chain rule over uniformly random orders, so $q = p$ exactly. The program returns a KL below $10^{-14}$.
+**One position per step.** Revealing one uniformly chosen masked position per step (the schedule `random_order_schedule([1] * L, L)`) averages the chain rule over uniformly random orders, so $q = p$ exactly. The program returns a KL below $10^{-14}$. Groups of equal size in random order (the schedule `random_order_schedule([L // K] * K, L)` for $K$ dividing $L$) are the same construction with groups instead of single positions, so ties inside a group remain.
 
 **Large K.** Let $\epsilon_K$ be the probability that two positions share a step, $\epsilon_K = 1 - \frac{K!}{(K-L)!\,K^L} \le \frac{L(L-1)}{2K}$. Then $q_K = (1 - \epsilon_K)\, p + \epsilon_K\, r_K$, where $r_K$ is the output law given a tie. Hence $q_K \to p$. When $p > 0$, $q_K \ge (1-\epsilon_K)\,p$ and $\mathrm{KL}(p \,\|\, q) \le \log(1 + \chi^2(p \,\|\, q))$ give
 
