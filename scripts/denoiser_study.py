@@ -1,7 +1,8 @@
 """Learned denoiser error against sample size and width, evaluated exactly.
 
-usage: python scripts/denoiser_study.py --law markov|potts [--workers N]
-Writes <out>/denoiser_<law>.json and <out>/denoiser_<law>.png.
+usage: python scripts/denoiser_study.py --law markov|potts [--workers N] [--extend]
+Writes <out>/denoiser_<law>.json and <out>/denoiser_<law>.png. With --extend the exact
+grid already in the json is kept and only the sampled runs and the checks are run.
 """
 
 import argparse
@@ -146,6 +147,7 @@ def main() -> None:
     parser.add_argument("--name", help="output file stem, default denoiser_<law>")
     parser.add_argument("--skip-checks", action="store_true")
     parser.add_argument("--skip-sampled", action="store_true")
+    parser.add_argument("--extend", action="store_true")
     parser.add_argument("--plot-only", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -172,6 +174,11 @@ def main() -> None:
             for w, n in BUDGET_CHECK
             if n in args.sizes and not args.skip_checks
         ],
+        "budget_rerun": [
+            ("exact", law, w, n, 0, args.iterations)
+            for w, n in BUDGET_CHECK
+            if n in args.sizes and not args.skip_checks
+        ],
         "sampled_runs": [
             ("sampled", law, w, n, s, SAMPLED_STEPS)
             for n, w, s in product(sampled_sizes[::-1], SAMPLED_WIDTHS, seeds)
@@ -181,6 +188,13 @@ def main() -> None:
             for n, w, s in product(sorted(args.sizes)[::-1], WIDTHS, seeds)
         ],
     }
+    previous = json.loads(json_path.read_text()) if args.extend else None
+    if previous is not None:
+        del groups["runs"]
+        config = previous["config"]
+        same = (config["sample_sizes"], config["seeds"], config["iterations"])
+        if same != (sorted(args.sizes), args.seeds, args.iterations):
+            raise SystemExit(f"the options differ from the grid in {json_path}")
     jobs = [job for group in groups.values() for job in group]
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         results = list(pool.map(run_job, jobs))
@@ -188,6 +202,12 @@ def main() -> None:
     for key, group in groups.items():
         split[key] = results[begin : begin + len(group)]
         begin += len(group)
+    info = {
+        "load_average": os.getloadavg()[0],
+        "workers": args.workers,
+        "torch": torch.__version__,
+        "wall_seconds": time.time() - start,
+    }
     report = {
         "law": {
             "name": f"{law} ({name} {parameter})",
@@ -211,11 +231,10 @@ def main() -> None:
         },
         "exact_sampler_kl": ref.sampler_kl(ref.table, SAMPLER_STEPS),
         **split,
-        "load_average": os.getloadavg()[0],
-        "workers": args.workers,
-        "torch": torch.__version__,
-        "wall_seconds": time.time() - start,
+        **info,
     }
+    if previous is not None:
+        report = {**previous, **split, "extension": info}
     json_path.write_text(json.dumps(report, indent=1))
     plot(report, json_path.with_suffix(".png"))
     print(json_path)
