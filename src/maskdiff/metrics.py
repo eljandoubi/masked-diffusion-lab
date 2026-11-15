@@ -10,10 +10,18 @@ from maskdiff.sampler import sampler_law, uniform_schedule
 
 
 def kl(p: np.ndarray, q: np.ndarray) -> float:
-    """KL(p || q) in nats; q must be positive wherever p is."""
+    """KL(p || q) in nats, accurate for nearby laws; inf if q = 0 where p > 0."""
     p, q = p.reshape(-1), q.reshape(-1)
     keep = p > 0
-    return float(np.sum(p[keep] * np.log1p((p[keep] - q[keep]) / q[keep])))
+    p, q = p[keep], q[keep]
+    if np.any(q <= 0):
+        return float("inf")
+    # log1p keeps nearby laws accurate but rounds to -inf when q is far above p
+    near = np.abs(p - q) <= 0.5 * q
+    log_ratio = np.empty_like(p)
+    log_ratio[near] = np.log1p((p[near] - q[near]) / q[near])
+    log_ratio[~near] = np.log(p[~near]) - np.log(q[~near])
+    return float(np.sum(p * log_ratio))
 
 
 def loglog_slope(

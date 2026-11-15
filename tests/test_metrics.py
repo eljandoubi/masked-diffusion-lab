@@ -1,3 +1,6 @@
+import math
+from decimal import Decimal, localcontext
+
 import numpy as np
 import pytest
 
@@ -5,6 +8,19 @@ from maskdiff.laws import markov_chain, potts_ring, total_correlation
 from maskdiff.metrics import kl, loglog_slope
 from maskdiff.partial import conditional_table, partial_marginals
 from maskdiff.sampler import random_order_schedule, sampler_law, uniform_schedule
+
+
+def decimal_kl(p, q):
+    """KL(p || q) in 60-digit arithmetic on the float values of p and q."""
+    with localcontext() as context:
+        context.prec = 60
+        total = Decimal(0)
+        for a, b in zip(p, q, strict=True):
+            if a > 0:
+                total += Decimal(float(a)) * (
+                    Decimal(float(a)).ln() - Decimal(float(b)).ln()
+                )
+        return float(total)
 
 
 def test_kl_of_a_law_with_itself_is_zero_and_matches_the_definition():
@@ -22,6 +38,40 @@ def test_kl_keeps_its_accuracy_for_nearby_laws():
     delta = 1e-7 * np.array([1, -1, 1, -1, 1, -1, 1, -1])
     q = p * (1 + delta)
     assert kl(p, q) == pytest.approx(0.5 * (delta**2).mean(), rel=1e-6)
+    assert kl(p, q) == float(np.sum(p * np.log1p((p - q) / q)))
+
+
+def test_kl_of_a_rare_bin_is_finite_and_not_negative_infinity():
+    p, q = np.array([1e-20, 1.0]), np.array([0.5, 0.5])
+    assert p.sum() == 1.0 and q.sum() == 1.0
+    assert kl(p, q) == pytest.approx(math.log(2), rel=1e-12)
+    assert kl(p, q) == pytest.approx(decimal_kl(p, q), rel=1e-12)
+
+
+@pytest.mark.parametrize("seed", range(5))
+def test_kl_of_imbalanced_laws_matches_high_precision_arithmetic(seed):
+    rng = np.random.default_rng(seed)
+    p = np.exp(rng.uniform(-80, 0, size=40))
+    p /= p.sum()
+    q = p * np.exp(rng.uniform(-45, 45, size=40))
+    q[20:] *= p[20:].sum() / q[20:].sum()
+    q[:20] = p[:20] * (1 + 1e-6 * rng.standard_normal(20))
+    q /= q.sum()
+    assert kl(p, q) == pytest.approx(decimal_kl(p, q), rel=1e-11)
+    assert kl(q, p) == pytest.approx(decimal_kl(q, p), rel=1e-11)
+
+
+def test_kl_is_infinite_when_the_model_misses_the_support_of_the_data():
+    p, q = np.array([0.5, 0.5]), np.array([1.0, 0.0])
+    with np.errstate(all="raise"):
+        assert kl(p, q) == math.inf
+
+
+def test_kl_does_not_count_bins_without_data_mass():
+    q = np.array([0.5, 0.25, 0.25])
+    assert kl(np.array([0.0, 0.25, 0.75]), q) == pytest.approx(0.75 * math.log(3))
+    assert kl(np.array([0.0, 0.0, 1.0]), np.array([0.0, 0.5, 0.5])) == math.log(2)
+    assert kl(np.array([0.0, 1.0]), np.array([0.0, 1.0])) == 0.0
 
 
 @pytest.mark.parametrize(
