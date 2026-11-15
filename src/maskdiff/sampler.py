@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import lru_cache
 from itertools import product
+from math import comb
 
 import numpy as np
 
@@ -73,6 +74,18 @@ def uniform_schedule(steps: int, length: int) -> list[np.ndarray]:
     for k in range(steps):
         r = 1.0 / (steps - k)
         out.append(np.where(a <= m, r**a * (1.0 - r) ** np.clip(m - a, 0, None), 0.0))
+    return out
+
+
+def random_order_schedule(counts: Sequence[int], length: int) -> list[np.ndarray]:
+    """Step k reveals counts[k] uniformly chosen masked positions (all if fewer)."""
+    out = []
+    for n in counts:
+        step = np.zeros((length + 1, length + 1))
+        for m in range(length + 1):
+            a = min(n, m)
+            step[m, a] = 1.0 / comb(m, a)
+        out.append(step)
     return out
 
 

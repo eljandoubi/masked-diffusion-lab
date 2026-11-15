@@ -5,11 +5,22 @@ import pytest
 
 from maskdiff.laws import markov_chain, potts_ring, product_of_marginals
 from maskdiff.partial import conditional_table, partial_marginals
-from maskdiff.sampler import sampler_law, transitions, uniform_schedule
+from maskdiff.sampler import (
+    random_order_schedule,
+    sampler_law,
+    transitions,
+    uniform_schedule,
+)
 
 
 def exact_table(p):
     return conditional_table(partial_marginals(p))
+
+
+def dependent_law(name, length, vocab):
+    if name == "markov":
+        return markov_chain(length, vocab, 0.9)
+    return potts_ring(length, vocab, 1.5)
 
 
 def known_mass(p, x, known):
@@ -29,6 +40,26 @@ def brute_force_law(p, steps):
                 before = [j for j in range(length) if tau[j] < tau[i]]
                 prob *= known_mass(p, x, before + [i]) / known_mass(p, x, before)
             law[x] += prob / steps**length
+    return law
+
+
+def brute_force_groups(p, counts):
+    """Average over uniform random orders cut into groups of the given sizes."""
+    length, vocab = p.ndim, p.shape[0]
+    law = np.zeros(p.shape)
+    orders = list(itertools.permutations(range(length)))
+    for order in orders:
+        groups, start = [], 0
+        for n in counts:
+            groups.append(order[start : start + n])
+            start += n
+        for x in itertools.product(range(vocab), repeat=length):
+            prob, before = 1.0, []
+            for group in groups:
+                for i in group:
+                    prob *= known_mass(p, x, before + [i]) / known_mass(p, x, before)
+                before = before + list(group)
+            law[x] += prob / len(orders)
     return law
 
 
@@ -94,3 +125,28 @@ def test_two_positions_mix_the_law_with_the_product_of_marginals(steps):
     q = sampler_law(exact_table(p), 3, 2, uniform_schedule(steps, 2))
     expected = (1 - 1 / steps) * p + product_of_marginals(p) / steps
     assert q == pytest.approx(expected, abs=1e-14)
+
+
+@pytest.mark.parametrize("name", ["markov", "potts"])
+@pytest.mark.parametrize("length,vocab", [(6, 3), (8, 2)])
+def test_one_position_per_step_in_random_order_is_exact(name, length, vocab):
+    p = dependent_law(name, length, vocab)
+    table = exact_table(p)
+    schedule = random_order_schedule([1] * length, length)
+    assert sampler_law(table, vocab, length, schedule) == pytest.approx(p, abs=1e-13)
+    uniform = sampler_law(table, vocab, length, uniform_schedule(length, length))
+    assert np.abs(uniform - p).max() > 1e-4
+
+
+@pytest.mark.parametrize("counts", [(2, 2), (2, 1, 1), (3, 1), (4,)])
+def test_grouped_random_order_matches_enumeration(counts):
+    p = potts_ring(4, 3, 0.9)
+    q = sampler_law(exact_table(p), 3, 4, random_order_schedule(counts, 4))
+    assert q == pytest.approx(brute_force_groups(p, counts), abs=1e-13)
+
+
+def test_one_group_is_the_one_step_sampler():
+    table = exact_table(markov_chain(6, 3, 0.8))
+    one_group = sampler_law(table, 3, 6, random_order_schedule([6], 6))
+    one_step = sampler_law(table, 3, 6, uniform_schedule(1, 6))
+    assert one_group == pytest.approx(one_step, abs=1e-15)
