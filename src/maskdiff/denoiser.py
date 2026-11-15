@@ -81,8 +81,8 @@ def train_exact(
     seed: int,
     iterations: int = 2000,
     floor: float = 0.05,
-) -> tuple[Denoiser, float]:
-    """L-BFGS on the exact expectation of the clipped loss under law, full batch."""
+) -> tuple[Denoiser, float, int]:
+    """L-BFGS on the exact clipped loss under law; returns model, loss, iterations."""
     torch.manual_seed(seed)
     length, vocab = law.ndim, law.shape[0]
     digits = state_digits(vocab, length)
@@ -107,7 +107,8 @@ def train_exact(
         return loss
 
     optimiser.step(closure)
-    return model, closure().item()
+    used = optimiser.state_dict()["state"][0]["n_iter"]
+    return model, closure().item(), used
 
 
 @torch.no_grad()

@@ -62,10 +62,11 @@ def run_job(job: tuple[str, str, int, int, int, int]) -> dict:
     start = time.time()
     if trainer == "exact":
         empirical = empirical_law(data, VOCAB)
-        model, loss = train_exact(empirical, width, seed, budget, FLOOR)
+        model, loss, used = train_exact(empirical, width, seed, budget, FLOOR)
     else:
         args = (data, VOCAB, width, budget, seed, SAMPLED_BATCH, SAMPLED_LR, FLOOR)
         model, loss = train_sampled(*args)
+        used = budget
     table = model_table(model)
     conditional, gap = ref.conditional_kl(table)
     return {
@@ -74,6 +75,7 @@ def run_job(job: tuple[str, str, int, int, int, int]) -> dict:
         "n": n,
         "seed": seed,
         "budget": budget,
+        "iterations_used": used,
         "cond_kl": conditional,
         "elbo_gap": gap,
         "sampler_kl": ref.sampler_kl(table, SAMPLER_STEPS),

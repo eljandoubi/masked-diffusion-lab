@@ -86,7 +86,7 @@ def test_exact_training_returns_the_exact_expected_loss_of_its_model():
     law = empirical_law(
         draw(markov_chain(4, 3, 0.8), 3000, np.random.default_rng(2)), 3
     )
-    model, loss = train_exact(law, 16, seed=0, iterations=60, floor=0.05)
+    model, loss, _ = train_exact(law, 16, seed=0, iterations=60, floor=0.05)
     table = model_table(model)
     expected = float((law * negative_elbo(table, 3, 4, 0.05)).sum())
     assert next(model.parameters()).dtype == torch.float64
@@ -98,12 +98,18 @@ def test_exact_training_on_the_data_law_learns_its_conditionals():
     ref = Reference.from_law(law)
     torch.manual_seed(0)
     before = ref.conditional_kl(model_table(Denoiser(5, 3, 32)))[0]
-    model, _ = train_exact(law, 32, seed=0, iterations=300)
+    model, _, _ = train_exact(law, 32, seed=0, iterations=300)
     assert ref.conditional_kl(model_table(model))[0] < before / 20
 
 
 def test_exact_training_is_deterministic():
     law = markov_chain(4, 3, 0.8)
-    first, _ = train_exact(law, 16, seed=1, iterations=40)
-    second, _ = train_exact(law, 16, seed=1, iterations=40)
+    first, _, _ = train_exact(law, 16, seed=1, iterations=40)
+    second, _, _ = train_exact(law, 16, seed=1, iterations=40)
     assert model_table(first) == pytest.approx(model_table(second), abs=1e-12)
+
+
+def test_exact_training_reports_the_iterations_it_used():
+    law = markov_chain(4, 3, 0.8)
+    assert train_exact(law, 16, seed=1, iterations=7)[2] == 7
+    assert train_exact(law, 16, seed=1, iterations=25)[2] == 25
