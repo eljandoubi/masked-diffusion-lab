@@ -1,0 +1,51 @@
+{
+ "steps": 16,
+ "markov": {
+  "law": "markov (persistence 0.8), L = 6, V = 3",
+  "rows": [
+   {
+    "persistence": 0.8,
+    "cond_kl": 0.0,
+    "sampler_kl": 0.017508589614587657
+   },
+   {
+    "persistence": 0.81,
+    "cond_kl": 0.00014139252774772955,
+    "sampler_kl": 0.01161364632202272
+   },
+   {
+    "persistence": 0.82,
+    "cond_kl": 0.0005830425531144517,
+    "sampler_kl": 0.007134989425089458
+   },
+   {
+    "persistence": 0.84,
+    "cond_kl": 0.002491312342340163,
+    "sampler_kl": 0.002875036495094358
+   },
+   {
+    "persistence": 0.86,
+    "cond_kl": 0.006037344249112399,
+    "sampler_kl": 0.005814526316938624
+   },
+   {
+    "persistence": 0.88,
+    "cond_kl": 0.0116810093528996,
+    "sampler_kl": 0.017442937101430134
+   },
+   {
+    "persistence": 0.9,
+    "cond_kl": 0.020137653481976527,
+    "sampler_kl": 0.039873494987282085
+   }
+  ]
+ },
+ "pair": {
+  "persistence": 0.4,
+  "other_persistence": 0.4266666666666667,
+  "exact_sampler_kl": 0.0003663554957981114,
+  "other_cond_kl": 0.0001435910699863948,
+  "other_sampler_kl": -2.2204460492503126e-16,
+  "max_law_difference": 1.1102230246251565e-16
+ }
+}

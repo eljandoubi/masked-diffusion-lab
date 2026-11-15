@@ -224,11 +224,13 @@ def sampler_facts(report: dict) -> list[str]:
 
 def denoiser_facts(report: dict) -> list[str]:
     """Derived numbers quoted in the README."""
-    floor = report["exact_sampler_kl"]
+    reference = report["exact_sampler_kl"]
     runs = report["runs"]
-    ratio = [r["sampler_kl"] / floor for r in runs]
+    ratio = [r["sampler_kl"] / reference for r in runs]
     wide = [
-        r["sampler_kl"] / floor for r in runs if r["n"] >= 100000 and r["width"] >= 32
+        r["sampler_kl"] / reference
+        for r in runs
+        if r["n"] >= 100000 and r["width"] >= 32
     ]
     widths = report["config"]["widths"]
 
@@ -237,7 +239,7 @@ def denoiser_facts(report: dict) -> list[str]:
             np.mean([r["sampler_kl"] for r in runs if (r["n"], r["width"]) == (n, w)])
             for w in widths
         ]
-        return [f"{m / floor:.2f}" for m in means]
+        return [f"{m / reference:.2f}" for m in means]
 
     facts = [
         f"sampler KL over the exact-conditional value, {len(runs)} runs: "
@@ -276,6 +278,50 @@ def denoiser_facts(report: dict) -> list[str]:
         if changes:
             facts.append(f"{check}, largest change factor {max(changes):.1f}")
     return facts
+
+
+def compensation_table(report: dict) -> str:
+    rows = report["markov"]["rows"]
+    exact = rows[0]["sampler_kl"]
+    header = [
+        "persistence of the conditionals",
+        "conditional KL",
+        f"K = {report['steps']} sampler KL",
+        "over the exact-conditional value",
+    ]
+    body = [
+        [
+            f"{r['persistence']:.2f}",
+            sci(r["cond_kl"]),
+            sci(r["sampler_kl"]),
+            f"{r['sampler_kl'] / exact:.3f}",
+        ]
+        for r in rows
+    ]
+    return table(header, body)
+
+
+def compensation_facts(report: dict) -> list[str]:
+    """Derived numbers quoted in the README."""
+    rows, pair = report["markov"]["rows"], report["pair"]
+    exact = rows[0]["sampler_kl"]
+    below = [r for r in rows if r["sampler_kl"] < exact]
+    best = min(rows, key=lambda r: r["sampler_kl"])
+    near = next(r for r in rows if r["persistence"] == 0.81)
+    return [
+        f"persistence {near['persistence']}: sampler KL {sci(near['sampler_kl'])}, "
+        f"{100 * (1 - near['sampler_kl'] / exact):.1f}% below the exact-conditional "
+        f"value {sci(exact)}",
+        f"persistences below the exact-conditional value: {below[0]['persistence']} "
+        f"to {below[-1]['persistence']}, smallest at {best['persistence']} "
+        f"({sci(best['sampler_kl'])})",
+        f"two positions, persistence {pair['persistence']}, K = {report['steps']}: "
+        f"exact conditionals {sci(pair['exact_sampler_kl'])}",
+        f"conditionals of persistence {pair['other_persistence']:.4f}: conditional "
+        f"KL {sci(pair['other_cond_kl'])}, |sampler KL| "
+        f"{sci(abs(pair['other_sampler_kl']))}, largest law difference "
+        f"{sci(pair['max_law_difference'])}",
+    ]
 
 
 def main() -> None:
@@ -328,6 +374,13 @@ def main() -> None:
         if report["sampled_budget_check"]:
             print("### budget check, sampled-t trainer (Adam steps)\n")
             print(budget_table(report, "sampled_budget_check", "sampled_runs"), "\n")
+    path = RESULTS / "compensation.json"
+    if path.exists():
+        report = json.loads(path.read_text())
+        print(f"## other conditionals, {report['markov']['law']}\n")
+        print(compensation_table(report), "\n")
+        print("### derived numbers\n")
+        print("\n".join(f"- {line}" for line in compensation_facts(report)), "\n")
 
 
 if __name__ == "__main__":
