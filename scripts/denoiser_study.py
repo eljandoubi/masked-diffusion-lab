@@ -122,11 +122,13 @@ def plot(report: dict, path: Path) -> None:
     axes[0].legend(title="hidden width", fontsize=8)
     axes[1].legend(fontsize=8)
     name = report["law"]["name"]
-    fig.suptitle(
+    title = (
         f"{name}, L = {LENGTH}, V = {VOCAB}: exact-expectation training "
-        "(solid, range over seeds), sampled t (x, dotted)",
-        fontsize=9,
+        "(solid, range over seeds)"
     )
+    if report["sampled_runs"]:
+        title += ", sampled t (x, dotted)"
+    fig.suptitle(title, fontsize=9)
     fig.tight_layout()
     fig.savefig(path, dpi=110)
 

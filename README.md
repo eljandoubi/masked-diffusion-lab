@@ -189,6 +189,8 @@ The picture matches the Markov chain: wider is worse up to $n = 10^4$ (n = 200: 
 
 ![Conditional KL and sampler KL against the number of training sequences, Potts ring](results/denoiser_potts.png)
 
+Solid lines: exact-expectation training, band = range over seeds. There are no sampled-$t$ runs for this law. Dashed line: sampler KL with exact conditionals.
+
 ## What is in the repo
 
 ```
