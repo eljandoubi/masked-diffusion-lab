@@ -31,3 +31,33 @@ Each cross-entropy is $H(c_i) + \mathrm{KL}(c_i \,\|\, q_i)$, and it can be mini
 $$\mathbb{E}_{x \sim p}\big[-\mathrm{ELBO}(x)\big] = H(p) + \underbrace{\sum_i \sum_{U \not\ni i} w_{|U|}\; \mathbb{E}_{x_U}\, \mathrm{KL}\big(c_i(\cdot \mid x_U) \,\|\, q_i(\cdot \mid x_U)\big)}_{\text{ELBO gap}}. \tag{3}$$
 
 Any positive weighting of the pairs has the same minimiser, so the clipped weight used in training (Part 3) does not move the optimum, only the trade-off when the model is too small.
+
+## 3. The K-step sampler
+
+Take the uniform grid $\alpha_{t_k} = k/K$. At step $k = 0, \dots, K-1$ each still-masked position is revealed with probability
+
+$$r_k = \frac{\alpha_{t_{k+1}} - \alpha_{t_k}}{1 - \alpha_{t_k}} = \frac{1}{K - k}.$$
+
+A position survives steps $0, \dots, k-1$ with probability $\prod_{j<k}(1 - r_j) = (K-k)/K$, so its reveal step $\tau_i$ satisfies $P(\tau_i = k) = \frac{K-k}{K} \cdot \frac{1}{K-k} = 1/K$: the reveal steps are independent and uniform on $\{0, \dots, K-1\}$. Positions revealed in the same step draw their tokens independently, each from its exact conditional given the partial sequence at the start of the step. With $U(i) = \{j : \tau_j < \tau_i\}$ the output law is
+
+$$q_K(x) = \mathbb{E}_\tau \prod_{i=1}^{L} c_i\big(x_i \mid x_{U(i)}\big). \tag{4}$$
+
+`sampler_law` computes this by dynamic programming over the $(V+1)^L$ partial sequences. The tests compare it with the explicit sum over $\tau$ and with $10^6$ simulated sequences.
+
+**No ties.** If all $\tau_i$ differ, the product in (4) is the chain rule in the order given by $\tau$, so it equals $p(x)$.
+
+**One position per step.** Revealing one uniformly chosen masked position per step (the schedule `random_order_schedule([1] * L, L)`) averages the chain rule over uniformly random orders, so $q = p$ exactly. The program returns a KL below $10^{-14}$.
+
+**Large K.** Let $\epsilon_K$ be the probability that two positions share a step, $\epsilon_K = 1 - \frac{K!}{(K-L)!\,K^L} \le \frac{L(L-1)}{2K}$. Then $q_K = (1 - \epsilon_K)\, p + \epsilon_K\, r_K$, where $r_K$ is the output law given a tie. Hence $q_K \to p$. When $p > 0$, $q_K \ge (1-\epsilon_K)\,p$ and $\mathrm{KL}(p \,\|\, q) \le \log(1 + \chi^2(p \,\|\, q))$ give
+
+$$\mathrm{KL}(p \,\|\, q_K) \le \log\Big(1 + \frac{\epsilon_K^2}{1 - \epsilon_K}\, \chi^2(r_K \,\|\, p)\Big) = O(K^{-2}).$$
+
+The error is quadratic, not linear, in $1/K$: $q_K - p$ is $O(1/K)$ at every point and KL is quadratic in that difference. To first order only one tied pair $\{i, j\}$ matters. It occurs with probability $1/K$, the other steps differ, and the pair is revealed behind a subset $U$ of the other $L - 2$ positions whose size is uniform on $\{0, \dots, L-2\}$ and which is uniform given its size. That pair multiplies the law by $p(x_i \mid x_U)\,p(x_j \mid x_U) / p(x_i, x_j \mid x_U)$. So
+
+$$\mathrm{KL}(p \,\|\, q_K) = \frac{c}{K^2}\,\big(1 + O(1/K)\big), \qquad c = \frac12 \sum_x p(x)\, g(x)^2, \qquad g(x) = \sum_{i<j} \mathbb{E}_U\Big[\frac{p(x_i \mid x_U)\, p(x_j \mid x_U)}{p(x_i, x_j \mid x_U)} - 1\Big]. \tag{5}$$
+
+The fraction inside is $e^{-\mathrm{pmi}}$ for the pointwise mutual information of $x_i$ and $x_j$ given $x_U$, so $c = 0$ for a product law and $c > 0$ as soon as some pair stays dependent given some subset. For $L = 2$ the mixture is exact, $q_K = (1 - 1/K)\,p + (1/K)\,p_1 \otimes p_2$. `maskdiff.asymptotics.leading_coefficient` evaluates $c$, and `tests/test_asymptotics.py` compares $K^2\,\mathrm{KL}$ with it up to $K = 2048$.
+
+**One step.** For $K = 1$ every position is revealed at step 0 from the empty context, so $q_1 = \prod_i p_i$ and $\mathrm{KL}(p \,\|\, q_1) = \sum_i H(x_i) - H(x)$, the total correlation. It is zero only for a product law. For a product law every conditional is a marginal, ties change nothing and $q_K = p$ for every $K$.
+
+**Link to the loss.** Use the $K$-step sampler as the model in the construction of section 1. The path version of (1) is the Riemann sum $\frac1K \sum_k \frac{1}{t_k}\,\mathbb{E}[\dots]$ with $t_k = (K-k)/K$. It is an upper bound on $-\log q_K(x)$, with equality at $K = 1$, and it tends to (2) at first order in $1/K$ (`tests/test_discrete_elbo.py`).
