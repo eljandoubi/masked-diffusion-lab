@@ -74,15 +74,27 @@ class Reference:
     def length(self) -> int:
         return self.law.ndim
 
-    def conditional_kl(self, model_table: np.ndarray) -> tuple[float, float]:
-        """Exact (conditional KL, ELBO gap) of model conditionals, shape (S, L, V)."""
+    def conditional_kl(
+        self, model_table: np.ndarray, only: np.ndarray | None = None
+    ) -> tuple[float, float]:
+        """Exact (conditional KL, ELBO gap) of model conditionals, shape (S, L, V).
+
+        only is a boolean mask over partial sequences: the other ones are left out.
+        """
         masked = state_digits(self.vocab, self.length) == self.vocab
         true, model = self.table[masked], model_table[masked]
         per_position = np.zeros(masked.shape)
         per_position[masked] = (true * np.log(true / model)).sum(axis=-1)
         weight = pattern_weights(self.length)[masked.sum(axis=1)]
-        gap = float((weight * self.mass * per_position.sum(axis=1)).sum())
+        terms = weight * self.mass * per_position.sum(axis=1)
+        gap = float((terms if only is None else terms * only).sum())
         return gap / (self.length + 1), gap
+
+    def exposure(self, only: np.ndarray) -> float:
+        """Share of the error weight that sits on the partial sequences in only."""
+        count = (state_digits(self.vocab, self.length) == self.vocab).sum(axis=1)
+        weight = pattern_weights(self.length)[count] * self.mass * count
+        return float(weight[only].sum() / weight.sum())
 
     def sampler_kl(self, model_table: np.ndarray, steps: int) -> float:
         """KL(data || K-step sampler) when the sampler uses the model conditionals."""

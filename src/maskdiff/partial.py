@@ -48,6 +48,11 @@ def plug_in_table(data: np.ndarray, vocab: int, alpha: float) -> np.ndarray:
     return conditional_table(partial_marginals(counts(data, vocab)), alpha)
 
 
+def reached(data: np.ndarray, vocab: int) -> np.ndarray:
+    """True for the partial sequences whose known positions match a row of data."""
+    return partial_marginals(counts(data, vocab)).reshape(-1) > 0
+
+
 def mask_tokens(
     x: np.ndarray, t: float | np.ndarray, rng: np.random.Generator, vocab: int
 ) -> tuple[np.ndarray, np.ndarray]:

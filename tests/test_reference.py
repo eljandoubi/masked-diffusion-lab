@@ -7,7 +7,7 @@ from helpers import random_table
 from maskdiff.elbo import negative_elbo
 from maskdiff.laws import entropy, markov_chain, potts_ring, total_correlation
 from maskdiff.metrics import Reference
-from maskdiff.partial import state_index
+from maskdiff.partial import state_digits, state_index
 
 
 def softmax(logits):
@@ -74,3 +74,27 @@ def test_sampler_error_with_exact_conditionals_at_one_step_is_the_total_correlat
     ref = Reference.from_law(law)
     assert ref.sampler_kl(ref.table, 1) == pytest.approx(total_correlation(law))
     assert ref.sampler_kl(ref.table, 8) < ref.sampler_kl(ref.table, 2)
+
+
+def test_the_error_splits_over_a_set_of_partial_sequences_and_its_complement():
+    ref = Reference.from_law(markov_chain(4, 3, 0.7))
+    model = random_table(ref.length, ref.vocab, 5)
+    states = len(model)
+    only = np.random.default_rng(6).random(states) < 0.4
+    total, gap = ref.conditional_kl(model)
+    inside, inside_gap = ref.conditional_kl(model, only)
+    outside, outside_gap = ref.conditional_kl(model, ~only)
+    assert 0 < inside < total and 0 < outside < total
+    assert inside + outside == pytest.approx(total, rel=1e-12)
+    assert inside_gap + outside_gap == pytest.approx(gap, rel=1e-12)
+    assert ref.conditional_kl(model, np.ones(states, dtype=bool)) == (total, gap)
+
+
+@pytest.mark.parametrize("masks", [1, 2, 3, 4])
+def test_every_number_of_masks_holds_the_same_share_of_the_error_weight(masks):
+    ref = Reference.from_law(potts_ring(4, 3, 0.8))
+    count = (state_digits(3, 4) == 3).sum(axis=1)
+    assert ref.exposure(count == masks) == pytest.approx(1 / 4)
+    assert ref.exposure(count >= 1) == pytest.approx(1.0)
+    only = np.random.default_rng(masks).random(len(count)) < 0.3
+    assert ref.exposure(only) + ref.exposure(~only) == pytest.approx(1.0)

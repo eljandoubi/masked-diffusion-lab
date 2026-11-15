@@ -9,6 +9,7 @@ from maskdiff.partial import (
     mask_tokens,
     partial_marginals,
     plug_in_table,
+    reached,
     state_digits,
     state_index,
 )
@@ -93,6 +94,13 @@ def test_plug_in_conditionals_add_alpha_to_the_counts_of_the_rows():
     assert table[2, 1] == pytest.approx([2.5 / 4, 1.5 / 4])
     assert table[7, 0] == pytest.approx([1.5 / 2, 0.5 / 2])
     assert table[6, 0] == pytest.approx([2.5 / 3, 0.5 / 3])
+
+
+def test_a_partial_sequence_is_reached_when_a_training_row_matches_its_known_part():
+    data = np.array([[0, 0], [0, 1]])
+    # base 3 states in order: 00, 01, 0m, 10, 11, 1m, m0, m1, mm
+    seen = [True, True, True, False, False, False, True, True, True]
+    assert reached(data, 2).tolist() == seen
 
 
 def test_plug_in_conditionals_without_smoothing_are_the_empirical_frequencies():
