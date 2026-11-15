@@ -233,9 +233,11 @@ def budget_table(report: dict, check: str, base: str) -> str:
                 str(run["n"]),
                 f"{first['budget']}: {sci(first['cond_kl'])}",
                 f"{run['budget']}: {sci(run['cond_kl'])}",
+                f"{run['cond_kl'] / first['cond_kl']:.2f}",
             ]
         )
-    return table(["width", "n", "budget: cond KL", "3x budget: cond KL"], rows)
+    header = ["width", "n", "budget: cond KL", "3x budget: cond KL", "3x / 1x"]
+    return table(header, rows)
 
 
 def trainer_table(report: dict) -> str:
@@ -331,6 +333,13 @@ def plug_in_facts(report: dict, base: dict) -> list[str]:
         facts.append(
             f"plug-in {alpha}: conditional KL below every width at n in {better}"
         )
+    ahead = [
+        n
+        for n in sizes
+        if min(cond[(w, n)].mean() for w in widths)
+        < min(plug[(alpha, n)] for alpha in alphas)
+    ]
+    facts.append(f"best width below all plug-in tables at n in {ahead}")
     for n in (sizes[0], sizes[-1]):
         values = ", ".join(f"{alpha}: {sci(plug_k[(alpha, n)])}" for alpha in alphas)
         best = min(sampler[(w, n)].mean() for w in widths)
@@ -348,6 +357,18 @@ def plug_in_facts(report: dict, base: dict) -> list[str]:
     facts.append(
         f"training loss below its minimum: {len(below)} of {len(report['runs'])} runs"
     )
+    for run in report["budget_check"]:
+        first = next(
+            r
+            for r in report["runs"]
+            if (r["width"], r["n"], r["seed"]) == (run["width"], run["n"], 0)
+        )
+        floor = best[(run["n"], 0)]
+        facts.append(
+            f"width {run['width']}, n = {run['n']}, seed 0: training loss above its "
+            f"minimum {sci(first['train_loss'] / floor - 1)} after {first['budget']} "
+            f"iterations, {sci(run['train_loss'] / floor - 1)} after {run['budget']}"
+        )
     return facts
 
 
