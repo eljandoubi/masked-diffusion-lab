@@ -28,6 +28,21 @@ def test_weights_are_the_probabilities_of_the_set_before_a_position():
     assert total == pytest.approx(1.0)
 
 
+@pytest.mark.parametrize("floor", [0.05, 0.2])
+def test_clipped_weights_match_numerical_integration(floor):
+    length, n = 6, 2_000_000
+    t = (np.arange(n) + 0.5) / n
+    w = pattern_weights(length, floor)
+    assert w[0] == 0.0
+    for m in range(1, length + 1):
+        direct = (t**m * (1 - t) ** (length - m) / np.maximum(t, floor)).mean()
+        assert w[m] == pytest.approx(direct, rel=1e-6)
+
+
+def test_a_tiny_floor_recovers_the_unclipped_weights():
+    assert pattern_weights(6, 1e-9) == pytest.approx(pattern_weights(6), rel=1e-6)
+
+
 def test_closed_form_equals_the_pattern_sum_integrated_over_t():
     length, vocab = 4, 3
     table = random_table(length, vocab, 0)
