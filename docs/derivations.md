@@ -32,6 +32,8 @@ $$\mathbb{E}_{x \sim p}\big[-\mathrm{ELBO}(x)\big] = H(p) + \underbrace{\sum_i \
 
 Any positive weighting of the pairs has the same minimiser, so the clipped weight used in training (Part 3) does not move the optimum, only the trade-off when the model is too small.
 
+The error measure of Part 3 is the conditional KL: draw $t$ uniformly, draw the mask pattern from the forward process, and average the KL of (3) over the masked positions of the pattern (zero if none is masked). Since $\int_0^1 t^m (1-t)^{L-m}\, dt \,/\, m = (m-1)!\,(L-m)!/(L+1)!$, it equals the ELBO gap divided by $L + 1$. Both are computed exactly by summing over all $(V+1)^L$ partial sequences (`Reference.conditional_kl`), and `tests/test_reference.py` checks them against the expected loss minus the entropy and against an explicit sum over $t$ and mask patterns.
+
 ## 3. The K-step sampler
 
 Take the uniform grid $\alpha_{t_k} = k/K$. At step $k = 0, \dots, K-1$ each still-masked position is revealed with probability
@@ -60,4 +62,4 @@ The fraction inside is $e^{-\mathrm{pmi}}$ for the pointwise mutual information 
 
 **One step.** For $K = 1$ every position is revealed at step 0 from the empty context, so $q_1 = \prod_i p_i$ and $\mathrm{KL}(p \,\|\, q_1) = \sum_i H(x_i) - H(x)$, the total correlation. It is zero only for a product law. For a product law every conditional is a marginal, ties change nothing and $q_K = p$ for every $K$.
 
-**Link to the loss.** Use the $K$-step sampler as the model in the construction of section 1. The path version of (1) is the Riemann sum $\frac1K \sum_k \frac{1}{t_k}\,\mathbb{E}[\dots]$ with $t_k = (K-k)/K$. It is an upper bound on $-\log q_K(x)$, with equality at $K = 1$, and it tends to (2) at first order in $1/K$ (`tests/test_discrete_elbo.py`).
+**Link to the loss.** Use the $K$-step sampler as the model in the construction of section 1. The path version of (1) is the Riemann sum $\frac1K \sum_k \frac{1}{t_k}\,\mathbb{E}[\dots]$ with $t_k = (K-k)/K$. It is an upper bound on $-\log q_K(x)$, with equality at $K = 1$, and it tends to (2) at first order in $1/K$ (`tests/test_discrete_elbo.py`). Averaged over $x \sim p$ the bound reads $\mathrm{KL}(p \,\|\, q_K) \le \mathbb{E}_p[-\mathrm{ELBO}_K] - H(p)$, and the right-hand side tends to the ELBO gap of (3). So for large $K$ the gap bounds the error of a sampler that runs on learned conditionals.
