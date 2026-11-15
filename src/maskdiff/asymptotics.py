@@ -16,13 +16,7 @@ def tie_probability(steps: int, length: int) -> float:
 
 
 def first_order_change(p: np.ndarray) -> np.ndarray:
-    """lim K (q_K(x) - p(x)) / p(x) for the sampler law q_K with exact conditionals.
-
-    Two positions i, j share a reveal step with probability 1/K. Given that, all other
-    steps differ, the pair sits behind a uniformly random subset U of the other
-    positions, and the law is multiplied by
-    p(x_i | x_U) p(x_j | x_U) / p(x_i, x_j | x_U).
-    """
+    """lim K (q_K - p) / p of the exact-conditional sampler, from single tied pairs."""
     length, vocab = p.ndim, p.shape[0]
     mass = partial_marginals(p).reshape(-1)
     x = sequences(length, vocab)

@@ -1,9 +1,4 @@
-"""Exact output law and simulation of the K-step parallel sampler.
-
-The sampler starts from the all-masked sequence. A step reveals a random subset of the
-masked positions, and every revealed position draws its token independently from its
-own conditional given the partial sequence at the start of the step.
-"""
+"""Exact output law and simulation of the K-step parallel sampler."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -18,22 +13,18 @@ from maskdiff.partial import state_digits, state_index
 
 @dataclass(frozen=True)
 class Transitions:
-    """Every move a sampler step can make: a partial sequence reveals a subset S.
+    """All moves of one sampler step, as parallel arrays over the moves."""
 
-    The probability of a move is step[masked, revealed] times the product, over the
-    positions in S, of the conditional probability of the token that is drawn there.
-    """
-
-    rows: np.ndarray
-    cols: np.ndarray
-    revealed: np.ndarray
-    masked: np.ndarray
-    factors: np.ndarray
+    rows: np.ndarray  # source partial sequence
+    cols: np.ndarray  # target partial sequence
+    revealed: np.ndarray  # number of positions the move reveals
+    masked: np.ndarray  # number of masked positions in the source
+    factors: np.ndarray  # table index of each drawn token, padded with a 1.0 entry
 
 
 @lru_cache(maxsize=None)
 def transitions(vocab: int, length: int) -> Transitions:
-    """List the (V + 1)**L partial sequences' moves: (2V + 1)**L in total."""
+    """All (2V + 1)**L moves of a step from the (V + 1)**L partial sequences."""
     digits = state_digits(vocab, length)
     power = (vocab + 1) ** np.arange(length - 1, -1, -1)
     n_masked = (digits == vocab).sum(axis=1)
@@ -63,11 +54,7 @@ def transitions(vocab: int, length: int) -> Transitions:
 
 
 def uniform_schedule(steps: int, length: int) -> list[np.ndarray]:
-    """Uniform grid alpha_k = k / K: step k reveals each masked position w.p. 1/(K-k).
-
-    Entry [m, a] of a step is the probability of one given subset of a positions
-    among the m masked ones: r**a (1 - r)**(m - a).
-    """
+    """Uniform grid alpha_k = k/K: step k reveals each masked position w.p. 1/(K-k)."""
     m = np.arange(length + 1)[:, None]
     a = np.arange(length + 1)[None, :]
     out = []
@@ -92,17 +79,14 @@ def random_order_schedule(counts: Sequence[int], length: int) -> list[np.ndarray
 def sampler_law(
     table: np.ndarray, vocab: int, length: int, schedule: Sequence[np.ndarray]
 ) -> np.ndarray:
-    """Exact output law of the sampler, shape (V,) * L, by dynamic programming.
-
-    The state is the partial sequence, so the program carries a vector of (V + 1)**L
-    probabilities through the steps. table holds the conditionals, shape (S, L, V).
-    """
+    """Exact output law (shape (V,) * L) of the sampler, by dynamic programming."""
     moves = transitions(vocab, length)
     weight = np.append(table.reshape(-1), 1.0)[moves.factors].prod(axis=1)
     n_states = (vocab + 1) ** length
     law = np.zeros(n_states)
     law[-1] = 1.0
     for step in schedule:
+        # step[m, a]: probability of one given set of a revealed among m masked
         mass = law[moves.rows] * weight * step[moves.masked, moves.revealed]
         law = np.bincount(moves.cols, weights=mass, minlength=n_states)
     full = law.reshape((vocab + 1,) * length)[(slice(0, vocab),) * length]

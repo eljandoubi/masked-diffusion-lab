@@ -15,11 +15,7 @@ def draw(p: np.ndarray, size: int, rng: np.random.Generator) -> np.ndarray:
 
 
 def markov_chain(length: int, vocab: int, persistence: float) -> np.ndarray:
-    """Stationary chain with a uniform start; persistence 0 gives the uniform law.
-
-    A token repeats its predecessor with probability persistence + (1 - persistence) / V
-    and moves to each other symbol with probability (1 - persistence) / V.
-    """
+    """Stationary symmetric chain with a uniform start; persistence 0 is uniform."""
     if not 0.0 <= persistence < 1.0:
         raise ValueError("persistence must lie in [0, 1)")
     x = sequences(length, vocab)
@@ -31,10 +27,7 @@ def markov_chain(length: int, vocab: int, persistence: float) -> np.ndarray:
 
 
 def potts_ring(length: int, vocab: int, coupling: float) -> np.ndarray:
-    """Cyclic Potts chain: p(x) is proportional to exp(coupling * #{i: x_i = x_i+1}).
-
-    For V = 2 this is the Ising ring with coupling / 2 on spins in {-1, +1}.
-    """
+    """Cyclic Potts chain, p(x) ~ exp(coupling * #{i: x_i = x_i+1}); V = 2 is Ising."""
     if length < 3:
         raise ValueError("a ring needs at least 3 sites")
     x = sequences(length, vocab)

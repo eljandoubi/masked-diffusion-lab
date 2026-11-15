@@ -48,12 +48,7 @@ def train(
     lr: float = 3e-3,
     floor: float = 0.05,
 ) -> tuple[Denoiser, float]:
-    """Minimise the clipped masked cross-entropy on the rows of data (n, L).
-
-    Each step draws a batch of rows, a uniform t per row and a mask with rate t. The
-    learning rate follows a cosine decay to a hundredth of its start. Returns the
-    model and the mean training loss over the last 200 steps.
-    """
+    """Minimise the clipped masked cross-entropy; return the model and the tail loss."""
     torch.manual_seed(seed)
     rows = torch.as_tensor(data, dtype=torch.long)
     n, length = rows.shape

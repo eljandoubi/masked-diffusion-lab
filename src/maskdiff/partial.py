@@ -1,9 +1,4 @@
-"""Partial sequences, their exact marginals and the exact conditionals.
-
-A partial sequence holds a token in {0, ..., V-1} at known positions and the mask
-symbol V at masked ones. Partial sequences are indexed in base V + 1 (C order), so
-there are (V + 1)**L of them and the all-masked one comes last.
-"""
+"""Partial sequences: tokens 0..V-1 or the mask V, indexed in base V + 1."""
 
 import numpy as np
 
@@ -28,10 +23,7 @@ def partial_marginals(p: np.ndarray) -> np.ndarray:
 
 
 def conditional_table(m: np.ndarray) -> np.ndarray:
-    """c[s, i, y] = P(x_i = y | known part of s) at masked i, one-hot at known i.
-
-    Shape (S, L, V), same state order as state_index. Needs a law with p > 0.
-    """
+    """Conditionals c[s, i, y] = P(x_i = y | known part of s), shape (S, L, V)."""
     length, vocab = m.ndim, m.shape[0] - 1
     table = np.zeros(m.shape + (length, vocab))
     for i in range(length):

@@ -54,14 +54,7 @@ class Reference:
         return self.law.ndim
 
     def conditional_kl(self, model_table: np.ndarray) -> tuple[float, float]:
-        """Exact (conditional KL, ELBO gap) of model conditionals of shape (S, L, V).
-
-        The gap is the expected negative ELBO minus the entropy of the law. It sums the
-        KL between true and model conditionals over masked positions of every partial
-        sequence, weighted by the forward process with weight 1/t. The conditional KL
-        averages the same KL over a uniform t and the masked positions of the pattern,
-        which is the gap divided by L + 1.
-        """
+        """Exact (conditional KL, ELBO gap) of model conditionals, shape (S, L, V)."""
         masked = state_digits(self.vocab, self.length) == self.vocab
         true, model = self.table[masked], model_table[masked]
         per_position = np.zeros(masked.shape)
