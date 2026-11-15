@@ -5,9 +5,14 @@ import numpy as np
 import pytest
 from helpers import integrand, random_table
 
-from maskdiff.elbo import negative_elbo, pattern_weights
+from maskdiff.elbo import loss_targets, negative_elbo, pattern_weights
 from maskdiff.laws import markov_chain, potts_ring, sequences
-from maskdiff.partial import conditional_table, partial_marginals, state_index
+from maskdiff.partial import (
+    conditional_table,
+    partial_marginals,
+    state_digits,
+    state_index,
+)
 
 
 def test_pattern_weights_are_beta_integrals():
@@ -86,3 +91,30 @@ def test_exact_conditionals_make_the_bound_tight_for_every_sequence(law, length,
     )
     table = conditional_table(partial_marginals(p))
     assert negative_elbo(table, vocab, length) == pytest.approx(-np.log(p), abs=1e-11)
+
+
+@pytest.mark.parametrize("floor", [0.0, 0.1])
+def test_loss_targets_reproduce_the_expected_loss(floor):
+    length, vocab = 4, 3
+    law = markov_chain(length, vocab, 0.7)
+    table = random_table(length, vocab, 4)
+    expected = float((law * negative_elbo(table, vocab, length, floor)).sum())
+    target = loss_targets(law, floor)
+    assert -(target * np.log(table)).sum() == pytest.approx(expected, rel=1e-12)
+
+
+def test_loss_targets_weigh_masked_positions_only_and_each_position_once():
+    length, vocab = 4, 3
+    target = loss_targets(potts_ring(length, vocab, 0.5))
+    digits = state_digits(vocab, length)
+    assert (target[digits != vocab] == 0).all()
+    assert target.sum() == pytest.approx(length)
+
+
+def test_normalised_loss_targets_are_the_exact_conditionals():
+    law = potts_ring(4, 3, 0.9)
+    target = loss_targets(law)
+    table = conditional_table(partial_marginals(law))
+    masked = state_digits(3, 4) == 3
+    normalised = target[masked] / target[masked].sum(axis=-1, keepdims=True)
+    assert normalised == pytest.approx(table[masked], abs=1e-12)

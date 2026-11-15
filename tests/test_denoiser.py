@@ -2,9 +2,15 @@ import numpy as np
 import pytest
 import torch
 
-from maskdiff.denoiser import Denoiser, masked_loss, model_table, train
+from maskdiff.denoiser import (
+    Denoiser,
+    masked_loss,
+    model_table,
+    train_exact,
+    train_sampled,
+)
 from maskdiff.elbo import negative_elbo
-from maskdiff.laws import draw, markov_chain
+from maskdiff.laws import draw, empirical_law, markov_chain
 from maskdiff.metrics import Reference
 from maskdiff.partial import mask_tokens
 
@@ -63,14 +69,41 @@ def test_a_short_training_run_lowers_the_conditional_kl():
     data = draw(law, 20_000, np.random.default_rng(0))
     torch.manual_seed(0)
     before = ref.conditional_kl(model_table(Denoiser(5, 3, 32)))[0]
-    model, final_loss = train(data, 3, 32, steps=400, seed=0)
+    model, final_loss = train_sampled(data, 3, 32, steps=400, seed=0)
     after = ref.conditional_kl(model_table(model))[0]
     assert after < before / 5
     assert np.isfinite(final_loss)
 
 
-def test_training_is_reproducible_for_a_seed():
+def test_sampled_training_is_reproducible_for_a_seed():
     data = draw(markov_chain(4, 3, 0.8), 2000, np.random.default_rng(1))
-    first, _ = train(data, 3, 16, steps=30, seed=3)
-    second, _ = train(data, 3, 16, steps=30, seed=3)
+    first, _ = train_sampled(data, 3, 16, steps=30, seed=3)
+    second, _ = train_sampled(data, 3, 16, steps=30, seed=3)
+    assert model_table(first) == pytest.approx(model_table(second), abs=1e-12)
+
+
+def test_exact_training_returns_the_exact_expected_loss_of_its_model():
+    law = empirical_law(
+        draw(markov_chain(4, 3, 0.8), 3000, np.random.default_rng(2)), 3
+    )
+    model, loss = train_exact(law, 16, seed=0, iterations=60, floor=0.05)
+    table = model_table(model)
+    expected = float((law * negative_elbo(table, 3, 4, 0.05)).sum())
+    assert next(model.parameters()).dtype == torch.float64
+    assert loss == pytest.approx(expected, rel=1e-9)
+
+
+def test_exact_training_on_the_data_law_learns_its_conditionals():
+    law = markov_chain(5, 3, 0.8)
+    ref = Reference.from_law(law)
+    torch.manual_seed(0)
+    before = ref.conditional_kl(model_table(Denoiser(5, 3, 32)))[0]
+    model, _ = train_exact(law, 32, seed=0, iterations=300)
+    assert ref.conditional_kl(model_table(model))[0] < before / 20
+
+
+def test_exact_training_is_deterministic():
+    law = markov_chain(4, 3, 0.8)
+    first, _ = train_exact(law, 16, seed=1, iterations=40)
+    second, _ = train_exact(law, 16, seed=1, iterations=40)
     assert model_table(first) == pytest.approx(model_table(second), abs=1e-12)

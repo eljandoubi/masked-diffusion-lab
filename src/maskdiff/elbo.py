@@ -44,3 +44,23 @@ def negative_elbo(
         loss = -np.log(table[state[:, None], positions[None, :], x])
         out += w[masked.sum()] * (loss * masked).sum(axis=1)
     return out.reshape((vocab,) * length)
+
+
+def loss_targets(law: np.ndarray, floor: float = 0.0) -> np.ndarray:
+    """W[s, i, y] with E_law[-ELBO] = -sum W[s, i, y] log q_i(y | s), shape (S, L, V).
+
+    The expected loss only sees the conditionals through the partial sequences s that
+    the mask patterns of a sequence produce, so it is a weighted cross-entropy on them.
+    """
+    length, vocab = law.ndim, law.shape[0]
+    x = sequences(length, vocab)
+    w = pattern_weights(length, floor)
+    positions = np.arange(length)
+    target = np.zeros((vocab + 1) ** length * length * vocab)
+    for pattern in range(1, 2**length):
+        masked = (pattern >> positions) & 1 == 1
+        state = state_index(np.where(masked, vocab, x), vocab)
+        flat = (state[:, None] * length + positions[None, :]) * vocab + x
+        mass = np.broadcast_to(w[masked.sum()] * law.reshape(-1, 1), flat.shape)
+        np.add.at(target, flat[:, masked], mass[:, masked])
+    return target.reshape(-1, length, vocab)

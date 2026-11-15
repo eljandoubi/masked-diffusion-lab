@@ -14,6 +14,15 @@ def draw(p: np.ndarray, size: int, rng: np.random.Generator) -> np.ndarray:
     return np.stack(np.unravel_index(index, p.shape), axis=1)
 
 
+def empirical_law(data: np.ndarray, vocab: int) -> np.ndarray:
+    """Relative frequencies of the rows of data (n, L), shape (V,) * L."""
+    shape = (vocab,) * data.shape[1]
+    counts = np.bincount(
+        np.ravel_multi_index(data.T, shape), minlength=vocab ** len(shape)
+    )
+    return counts.reshape(shape) / len(data)
+
+
 def markov_chain(length: int, vocab: int, persistence: float) -> np.ndarray:
     """Stationary symmetric chain with a uniform start; persistence 0 is uniform."""
     if not 0.0 <= persistence < 1.0:

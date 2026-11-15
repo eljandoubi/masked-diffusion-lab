@@ -3,6 +3,7 @@ import pytest
 
 from maskdiff.laws import (
     draw,
+    empirical_law,
     entropy,
     marginal,
     markov_chain,
@@ -88,6 +89,16 @@ def test_ring_is_invariant_under_a_cyclic_shift():
 
 def test_entropy_of_the_uniform_law():
     assert entropy(np.full(27, 1 / 27)) == pytest.approx(np.log(27))
+
+
+def test_empirical_law_counts_relative_frequencies():
+    data = np.array([[0, 1], [0, 1], [1, 0], [1, 1]])
+    law = empirical_law(data, 2)
+    assert law.tolist() == [[0.0, 0.5], [0.25, 0.25]]
+    p = potts_ring(4, 3, 0.8)
+    big = empirical_law(draw(p, 400_000, np.random.default_rng(1)), 3)
+    assert big.sum() == pytest.approx(1.0)
+    assert np.abs(big - p).max() < 5 * np.sqrt(p.max() / 400_000)
 
 
 def test_draw_returns_sequences_with_the_law_as_frequencies():

@@ -1,10 +1,11 @@
-"""A small MLP denoiser for masked sequences and its training loop."""
+"""A small MLP denoiser for masked sequences and its two training loops."""
 
 import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
 
+from maskdiff.elbo import loss_targets
 from maskdiff.partial import state_digits
 
 
@@ -22,8 +23,10 @@ class Denoiser(nn.Module):
         self.net = nn.Sequential(*layers)
 
     def forward(self, tokens: torch.Tensor) -> torch.Tensor:
-        onehot = F.one_hot(tokens, self.vocab + 1).float().flatten(1)
-        return self.net(onehot).view(-1, self.length, self.vocab)
+        onehot = F.one_hot(tokens, self.vocab + 1).flatten(1)
+        return self.net(onehot.to(self.net[0].weight.dtype)).view(
+            -1, self.length, self.vocab
+        )
 
 
 def masked_loss(
@@ -38,7 +41,7 @@ def masked_loss(
     return (ce.view_as(x) * masked).sum(dim=1) / t.clamp(min=floor)
 
 
-def train(
+def train_sampled(
     data: np.ndarray,
     vocab: int,
     width: int,
@@ -48,7 +51,7 @@ def train(
     lr: float = 3e-3,
     floor: float = 0.05,
 ) -> tuple[Denoiser, float]:
-    """Minimise the clipped masked cross-entropy; return the model and the tail loss."""
+    """Adam on sampled rows, t and masks; returns the model and its tail loss."""
     torch.manual_seed(seed)
     rows = torch.as_tensor(data, dtype=torch.long)
     n, length = rows.shape
@@ -70,6 +73,45 @@ def train(
         if step >= steps - 200:
             tail += loss.detach().mean()
     return model, float(tail) / min(200, steps)
+
+
+def train_exact(
+    law: np.ndarray,
+    width: int,
+    seed: int,
+    iterations: int = 2000,
+    floor: float = 0.05,
+) -> tuple[Denoiser, float]:
+    """L-BFGS on the exact expectation over t and masks of the clipped loss under law.
+
+    The expectation is a weighted cross-entropy on all partial sequences, so a step
+    carries no sampling noise. Returns the model (float64) and its final loss.
+    """
+    torch.manual_seed(seed)
+    length, vocab = law.ndim, law.shape[0]
+    digits = state_digits(vocab, length)
+    keep = (digits == vocab).any(axis=1)
+    tokens = torch.as_tensor(digits[keep])
+    target = torch.as_tensor(loss_targets(law, floor)[keep])
+    model = Denoiser(length, vocab, width).double()
+    optimiser = torch.optim.LBFGS(
+        model.parameters(),
+        max_iter=iterations,
+        max_eval=2 * iterations,
+        history_size=30,
+        line_search_fn="strong_wolfe",
+        tolerance_grad=1e-12,
+        tolerance_change=1e-15,
+    )
+
+    def closure() -> torch.Tensor:
+        optimiser.zero_grad()
+        loss = -(target * F.log_softmax(model(tokens), dim=-1)).sum()
+        loss.backward()
+        return loss
+
+    optimiser.step(closure)
+    return model, closure().item()
 
 
 @torch.no_grad()
