@@ -1,4 +1,4 @@
-"""Exact output law of the K-step parallel sampler.
+"""Exact output law and simulation of the K-step parallel sampler.
 
 The sampler starts from the all-masked sequence. A step reveals a random subset of the
 masked positions, and every revealed position draws its token independently from its
@@ -13,7 +13,7 @@ from math import comb
 
 import numpy as np
 
-from maskdiff.partial import state_digits
+from maskdiff.partial import state_digits, state_index
 
 
 @dataclass(frozen=True)
@@ -109,3 +109,26 @@ def sampler_law(
     if abs(full.sum() - 1.0) > 1e-9:
         raise ValueError("the schedule leaves positions masked")
     return full
+
+
+def simulate(
+    table: np.ndarray,
+    vocab: int,
+    length: int,
+    steps: int,
+    size: int,
+    rng: np.random.Generator,
+    chunk: int = 100_000,
+) -> np.ndarray:
+    """Run the uniform-grid sampler `size` times and return the sequences."""
+    out = np.empty((size, length), dtype=np.int64)
+    for start in range(0, size, chunk):
+        n = min(chunk, size - start)
+        state = np.full((n, length), vocab)
+        for k in range(steps):
+            reveal = (state == vocab) & (rng.random((n, length)) < 1.0 / (steps - k))
+            cdf = table[state_index(state, vocab)].cumsum(axis=-1)
+            token = (rng.random((n, length, 1)) > cdf).sum(axis=-1)
+            state = np.where(reveal, np.minimum(token, vocab - 1), state)
+        out[start : start + n] = state
+    return out

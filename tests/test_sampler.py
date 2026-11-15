@@ -8,6 +8,7 @@ from maskdiff.partial import conditional_table, partial_marginals
 from maskdiff.sampler import (
     random_order_schedule,
     sampler_law,
+    simulate,
     transitions,
     uniform_schedule,
 )
@@ -150,3 +151,19 @@ def test_one_group_is_the_one_step_sampler():
     one_group = sampler_law(table, 3, 6, random_order_schedule([6], 6))
     one_step = sampler_law(table, 3, 6, uniform_schedule(1, 6))
     assert one_group == pytest.approx(one_step, abs=1e-15)
+
+
+def test_dynamic_program_matches_a_million_simulated_sequences():
+    length, vocab, steps, size = 6, 3, 4, 1_000_000
+    p = markov_chain(length, vocab, 0.8)
+    table = exact_table(p)
+    q = sampler_law(table, vocab, length, uniform_schedule(steps, length))
+    samples = simulate(table, vocab, length, steps, size, np.random.default_rng(0))
+    index = np.ravel_multi_index(samples.T, (vocab,) * length)
+    freq = np.bincount(index, minlength=vocab**length).reshape(p.shape) / size
+
+    def worst_z(law):
+        return np.abs((freq - law) / np.sqrt(law * (1 - law) / size)).max()
+
+    assert worst_z(q) < 5
+    assert worst_z(p) > 20
