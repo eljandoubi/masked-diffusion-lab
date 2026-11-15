@@ -1,0 +1,212 @@
+"""Print the markdown tables of the README from results/*.json."""
+
+import json
+from pathlib import Path
+
+import numpy as np
+
+from maskdiff.metrics import loglog_slope
+
+RESULTS = Path(__file__).resolve().parent.parent / "results"
+DECADES = [(200, 2000), (2000, 20000), (20000, 200000), (200, 200000)]
+
+
+def sci(x: float) -> str:
+    return f"{x:.3e}"
+
+
+def table(header: list[str], rows: list[list[str]]) -> str:
+    lines = ["| " + " | ".join(header) + " |", "|" + "---|" * len(header)]
+    lines += ["| " + " | ".join(row) + " |" for row in rows]
+    return "\n".join(lines)
+
+
+def find(report: dict, family: str, length: int, vocab: int) -> list[dict]:
+    return [
+        c
+        for c in report["cases"]
+        if (c["family"], c["length"], c["vocab"]) == (family, length, vocab)
+    ]
+
+
+def sampler_error_table(report: dict, family: str, length: int, vocab: int) -> str:
+    cases = find(report, family, length, vocab)
+    name = "coupling" if family == "potts" else "persistence"
+    header = ["K"] + [f"{name} {c['param']}" for c in cases]
+    rows = [
+        [str(k)] + [sci(max(c["kl"][i], 0.0)) for c in cases]
+        for i, k in enumerate(report["grid"])
+    ]
+    rows.append(
+        [f"{length} (one position per step)"]
+        + [sci(abs(c["one_at_a_time"])) for c in cases]
+    )
+    return table(header, rows)
+
+
+def slope_table(report: dict, length: int, vocab: int) -> str:
+    lo, hi = report["fit_range"]
+    elo, ehi = report["fit_range_extended"]
+    header = [
+        "law",
+        "total correlation",
+        f"slope, K {lo} to {hi}",
+        f"slope, K {elo} to {ehi}",
+        "c",
+        f"K^2 KL at K = {ehi}",
+    ]
+    rows = []
+    for family in ("potts", "markov"):
+        for c in find(report, family, length, vocab):
+            if "slope" not in c:
+                continue
+            name = f"{family} {c['param']}"
+            rows.append(
+                [
+                    name,
+                    f"{c['total_correlation']:.4f}",
+                    f"{c['slope']:.3f}",
+                    f"{c['slope_extended']:.3f}",
+                    f"{c['coefficient']:.4f}",
+                    f"{c['kl_extended'][-1] * ehi**2:.4f}",
+                ]
+            )
+    return table(header, rows)
+
+
+def equal_count_table(report: dict, family: str, length: int, vocab: int) -> str:
+    cases = [c for c in find(report, family, length, vocab) if "slope" in c]
+    steps = [int(k) for k in cases[0]["equal_count"]]
+    name = "coupling" if family == "potts" else "persistence"
+    header = ["K", "schedule"] + [f"{name} {c['param']}" for c in cases]
+    rows = []
+    for k in steps:
+        uniform = [c["kl"][report["grid"].index(k)] for c in cases]
+        equal = [c["equal_count"][str(k)] for c in cases]
+        rows.append([str(k), "uniform grid"] + [sci(v) for v in uniform])
+        rows.append(["", "equal counts, random order"] + [sci(v) for v in equal])
+    return table(header, rows)
+
+
+def cell_values(report: dict, key: str) -> dict[tuple[int, int], np.ndarray]:
+    cells: dict[tuple[int, int], list[float]] = {}
+    for run in report["runs"]:
+        cells.setdefault((run["width"], run["n"]), []).append(run[key])
+    return {k: np.array(v) for k, v in cells.items()}
+
+
+def denoiser_table(report: dict, key: str) -> str:
+    cells = cell_values(report, key)
+    widths, sizes = report["config"]["widths"], report["config"]["sample_sizes"]
+    rows = [[str(n)] + [sci(cells[(w, n)].mean()) for w in widths] for n in sizes]
+    return table(["n"] + [f"width {w}" for w in widths], rows)
+
+
+def slope_by_decade(report: dict) -> str:
+    cells = cell_values(report, "cond_kl")
+    widths, sizes = report["config"]["widths"], report["config"]["sample_sizes"]
+    header = ["width"] + [f"n {lo} to {hi}" for lo, hi in DECADES]
+    rows = []
+    for w in widths:
+        mean = [cells[(w, n)].mean() for n in sizes]
+        row = [str(w)]
+        for lo, hi in DECADES:
+            slope, r2 = loglog_slope(sizes, mean, lo, hi)
+            row.append(f"{slope:.2f}")
+        rows.append(row)
+    return table(header, rows)
+
+
+def plateau_widths(report: dict, tolerance: float = 0.10) -> str:
+    cells = cell_values(report, "cond_kl")
+    widths, sizes = report["config"]["widths"], report["config"]["sample_sizes"]
+    rows = []
+    for n in sizes:
+        mean = [cells[(w, n)].mean() for w in widths]
+        best = min(mean)
+        first = next(
+            w for w, m in zip(widths, mean, strict=True) if m <= (1 + tolerance) * best
+        )
+        rows.append([str(n), str(first), f"{mean[0] / best:.2f}"])
+    return table(
+        ["n", "smallest width within 10% of the best", "width 16 / best"], rows
+    )
+
+
+def spread(report: dict) -> str:
+    cells = cell_values(report, "cond_kl")
+    ratio = [v.std(ddof=1) / v.mean() for v in cells.values()]
+    return (
+        "seed to seed std over mean of the conditional KL: "
+        f"median {np.median(ratio):.2f}, max {max(ratio):.2f}"
+    )
+
+
+def budget_table(report: dict) -> str:
+    cells = cell_values(report, "cond_kl")
+    rows = []
+    for run in report["budget_check"]:
+        base = cells[(run["width"], run["n"])]
+        rows.append(
+            [
+                str(run["width"]),
+                str(run["n"]),
+                sci(base[0]),
+                sci(run["cond_kl"]),
+                str(run["steps"]),
+            ]
+        )
+    return table(
+        ["width", "n", "cond KL, 8000 steps (seed 0)", "cond KL, longer run", "steps"],
+        rows,
+    )
+
+
+def run_note(report: dict) -> str:
+    return f"wall {report['wall_seconds']:.0f} s, load {report['load_average']:.1f}"
+
+
+def main() -> None:
+    path = RESULTS / "sampler_error.json"
+    if path.exists():
+        report = json.loads(path.read_text())
+        print(f"## sampler error ({run_note(report)})\n")
+        for family in ("potts", "markov"):
+            print(f"### {family}, L = 6, V = 3\n")
+            print(sampler_error_table(report, family, 6, 3), "\n")
+        print("### slopes, L = 6, V = 3\n")
+        print(slope_table(report, 6, 3), "\n")
+        print("### slopes, L = 8, V = 2\n")
+        print(slope_table(report, 8, 2), "\n")
+        print("### equal counts, potts L = 6\n")
+        print(equal_count_table(report, "potts", 6, 3), "\n")
+        print("### equal counts, markov L = 6\n")
+        print(equal_count_table(report, "markov", 6, 3), "\n")
+    for law in ("markov", "potts"):
+        path = RESULTS / f"denoiser_{law}.json"
+        if not path.exists():
+            continue
+        report = json.loads(path.read_text())
+        steps = report["config"]["sampler_steps"]
+        print(f"## denoiser, {report['law']['name']} ({run_note(report)})\n")
+        print(
+            f"entropy {report['law']['entropy']:.4f}, "
+            f"total correlation {report['law']['total_correlation']:.4f}, "
+            f"exact K = {steps} sampler KL {sci(report['exact_sampler_kl'])}\n"
+        )
+        print("### conditional KL (mean over seeds)\n")
+        print(denoiser_table(report, "cond_kl"), "\n")
+        print(spread(report), "\n")
+        print(f"### sampler KL at K = {steps} (mean over seeds)\n")
+        print(denoiser_table(report, "sampler_kl"), "\n")
+        print("### log-log slope of the conditional KL against n\n")
+        print(slope_by_decade(report), "\n")
+        print("### width at which the error stops improving\n")
+        print(plateau_widths(report), "\n")
+        if report["budget_check"]:
+            print("### step budget check\n")
+            print(budget_table(report), "\n")
+
+
+if __name__ == "__main__":
+    main()
