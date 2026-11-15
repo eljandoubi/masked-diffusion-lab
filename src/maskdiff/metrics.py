@@ -40,6 +40,19 @@ def loglog_slope(
     return float(slope), float(r2)
 
 
+# two-sided 95% quantiles of Student's t, by degrees of freedom
+T_975 = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571}
+
+
+def paired_interval(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, float, float]:
+    """Differences b - a of paired runs, their mean and the 95% t half-width."""
+    diff = np.asarray(b, dtype=float) - np.asarray(a, dtype=float)
+    if len(diff) - 1 not in T_975:
+        raise ValueError("the t table covers 2 to 6 pairs")
+    half = T_975[len(diff) - 1] * diff.std(ddof=1) / np.sqrt(len(diff))
+    return diff, float(diff.mean()), float(half)
+
+
 @dataclass(frozen=True)
 class Reference:
     """A data law with its exact partial marginals and exact conditionals."""

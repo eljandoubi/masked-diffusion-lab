@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from maskdiff.laws import markov_chain, potts_ring, total_correlation
-from maskdiff.metrics import kl, loglog_slope
+from maskdiff.metrics import T_975, kl, loglog_slope, paired_interval
 from maskdiff.partial import conditional_table, partial_marginals
 from maskdiff.sampler import random_order_schedule, sampler_law, uniform_schedule
 
@@ -111,3 +111,36 @@ def test_slope_of_a_power_law_and_the_fit_range():
     assert slope == pytest.approx(-2.0)
     with pytest.raises(ValueError):
         loglog_slope(x, y, 60, 64)
+
+
+def test_paired_interval_takes_the_differences_of_the_pairs():
+    diff, mean, half = paired_interval([1.0, 2.0, 3.0], [2.0, 4.0, 5.0])
+    assert diff.tolist() == [1.0, 2.0, 2.0]
+    assert mean == pytest.approx(5 / 3)
+    assert half == pytest.approx(T_975[2] * math.sqrt(1 / 3) / math.sqrt(3))
+    assert (mean - half, mean + half) == pytest.approx((0.2323, 3.1010), abs=1e-3)
+
+
+def test_paired_interval_is_blind_to_what_the_two_runs_of_a_pair_share():
+    a = np.array([1.0, 2.0, 4.0])
+    b = a + np.array([0.1, 0.2, 0.15])
+    shared = np.array([0.0, 50.0, -30.0])
+    plain, shifted = paired_interval(a, b), paired_interval(a + shared, b + shared)
+    assert shifted[0] == pytest.approx(plain[0])
+    assert shifted[1:] == pytest.approx(plain[1:])
+
+
+def test_paired_interval_needs_between_two_and_six_pairs():
+    with pytest.raises(ValueError):
+        paired_interval([1.0], [2.0])
+    with pytest.raises(ValueError):
+        paired_interval(np.ones(7), np.ones(7))
+
+
+@pytest.mark.parametrize("pairs", [2, 3, 5])
+def test_the_t_interval_covers_the_true_mean_95_percent_of_the_time(pairs):
+    rng = np.random.default_rng(pairs)
+    samples = rng.standard_normal((40_000, pairs))
+    half = T_975[pairs - 1] * samples.std(axis=1, ddof=1) / np.sqrt(pairs)
+    covered = (np.abs(samples.mean(axis=1)) <= half).mean()
+    assert covered == pytest.approx(0.95, abs=0.006)

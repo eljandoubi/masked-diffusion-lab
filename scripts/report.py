@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from maskdiff.metrics import loglog_slope
+from maskdiff.metrics import loglog_slope, paired_interval
 
 RESULTS = Path(__file__).resolve().parent.parent / "results"
 DECADES = [(200, 2000), (2000, 20000), (20000, 200000), (200, 200000)]
@@ -133,6 +133,45 @@ def plateau_widths(report: dict, tolerance: float = 0.10) -> str:
     return table(
         ["n", "smallest width within 10% of the best", "width 16 / best"], rows
     )
+
+
+def seed_values(report: dict, width: int, n: int, key: str = "cond_kl") -> np.ndarray:
+    runs = sorted(
+        (r for r in report["runs"] if (r["width"], r["n"]) == (width, n)),
+        key=lambda r: r["seed"],
+    )
+    return np.array([r[key] for r in runs])
+
+
+def paired_widths(report: dict) -> str:
+    """Neighbouring widths, paired by seed (the seed fixes the training sample)."""
+    widths, sizes = report["config"]["widths"], report["config"]["sample_sizes"]
+    header = [
+        "n",
+        "widths",
+        "cond KL, wider minus narrower, per seed",
+        "mean",
+        "95% interval",
+        "wider / narrower",
+    ]
+    rows = []
+    for n in sizes:
+        for narrow, wide in zip(widths, widths[1:], strict=False):
+            diff, mean, half = paired_interval(
+                seed_values(report, narrow, n), seed_values(report, wide, n)
+            )
+            ratio = seed_values(report, wide, n) / seed_values(report, narrow, n)
+            rows.append(
+                [
+                    str(n),
+                    f"{narrow}, {wide}",
+                    ", ".join(f"{d:+.2e}" for d in diff),
+                    f"{mean:+.2e}",
+                    f"{mean - half:+.2e} to {mean + half:+.2e}",
+                    f"{ratio.min():.2f} to {ratio.max():.2f}",
+                ]
+            )
+    return table(header, rows)
 
 
 def spread(report: dict) -> str:
@@ -363,6 +402,8 @@ def main() -> None:
         print(slope_by_decade(report), "\n")
         print("### width at which the error stops improving\n")
         print(plateau_widths(report), "\n")
+        print("### neighbouring widths, paired by seed\n")
+        print(paired_widths(report), "\n")
         print("### derived numbers\n")
         print("\n".join(f"- {line}" for line in denoiser_facts(report)), "\n")
         if report["budget_check"]:
