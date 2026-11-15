@@ -162,7 +162,7 @@ The second intervention is a split of the error. A partial sequence is reached w
 | plug-in 0.1 | 4.946e-02 | 3.669e-02 | 1.278e-02 | 0.26 |
 | plug-in 1 | 6.142e-02 | 4.864e-02 | 1.278e-02 | 0.21 |
 
-The growth of the error with width at $n = 200$ is therefore a growth on the reached partial sequences (6.6e-2 at width 16, 2.6e-1 at width 128), not an effect of extrapolation to the unreached ones. At $n = 2000$ the unreached share is 5% to 7%. Taken together, the training-loss gap, the early stopping and the split support the reading that the width effect at small $n$ comes from fitting the training sequences closely. This holds for two sizes, one stopping budget and 3 seeds, and no network with weight decay was run.
+The growth of the error with width at $n = 200$ is therefore mostly a growth on the reached partial sequences (from 6.6e-2 at width 16 to 2.6e-1 at width 128, against 2.2e-2 to 6.7e-2 on the unreached ones), not an effect of extrapolation alone. At $n = 2000$ the unreached share is 5% to 7%. Taken together, the training-loss gap, the early stopping and the split support the reading that the width effect at small $n$ comes from fitting the training sequences closely. This holds for two sizes, one stopping budget and 3 seeds, and no network with weight decay was run.
 
 Sampled $t$ against the exact expectation, mean over 3 seeds (sampled: Adam, batch 2048, 12000 steps; sub-grid of widths 16 and 128):
 
