@@ -68,4 +68,20 @@ The fraction inside is $e^{-\mathrm{pmi}}$ for the pointwise mutual information 
 
 **One step.** For $K = 1$ every position is revealed at step 0 from the empty context, so $q_1 = \prod_i p_i$ and $\mathrm{KL}(p \,\|\, q_1) = \sum_i H(x_i) - H(x)$, the total correlation. It is zero only for a product law. For a product law every conditional is a marginal, ties change nothing and $q_K = p$ for every $K$.
 
-**Link to the loss.** Use the $K$-step sampler as the model in the construction of section 1. The path version of (1) is the Riemann sum $\frac1K \sum_k \frac{1}{t_k}\,\mathbb{E}[\dots]$ with $t_k = (K-k)/K$. It is an upper bound on $-\log q_K(x)$, with equality at $K = 1$, and it tends to (2) at first order in $1/K$ (`tests/test_discrete_elbo.py`). Averaged over $x \sim p$ the bound reads $\mathrm{KL}(p \,\|\, q_K) \le \mathbb{E}_p[-\mathrm{ELBO}_K] - H(p)$, and the right-hand side tends to the ELBO gap of (3). So for large $K$ the gap bounds the error of a sampler that runs on learned conditionals.
+**Link to the loss.** Use the $K$-step sampler as the model in the construction of section 1. The path version of (1) is the Riemann sum $\frac1K \sum_k \frac{1}{t_k}\,\mathbb{E}[\dots]$ with $t_k = (K-k)/K$. It is an upper bound on $-\log q_K(x)$, with equality at $K = 1$, and it tends to (2) at first order in $1/K$ (`tests/test_discrete_elbo.py`). Averaged over $x \sim p$ the bound reads $\mathrm{KL}(p \,\|\, q_K) \le \mathbb{E}_p[-\mathrm{ELBO}_K] - H(p)$, and the right-hand side tends to the ELBO gap of (3). So for large $K$ the gap bounds the error of a sampler that runs on learned conditionals from above, up to a term that vanishes with $K$. It is not a lower bound, see Part 4.
+
+## 4. The exact conditionals do not minimise the K-step error
+
+Part 2 shows that the exact conditionals minimise the training loss. The error of the sampler is another function of the conditionals and has another minimiser. Take $L = 2$, $V = 2$ and let $p_\rho$ be the Markov chain with persistence $\rho$. Its marginals are uniform and $p_\rho = \rho\, d + (1-\rho)\, u$, where $d$ puts mass $1/2$ on each of the two sequences with equal tokens and $u$ is uniform on the four sequences.
+
+Give the sampler of Part 3 the exact conditionals of $p_{\rho'}$. The two reveal steps differ with probability $1 - 1/K$, and then (4) is the chain rule, so the output is $p_{\rho'}$. With probability $1/K$ they coincide and the output is the product of the marginals, which is $u$. Hence
+
+$$q_K = \Big(1 - \frac{1}{K}\Big)\, p_{\rho'} + \frac{1}{K}\, u = p_{\rho'(1 - 1/K)}.$$
+
+The exact conditionals ($\rho' = \rho$) give persistence $\rho(1 - 1/K)$ and
+
+$$\mathrm{KL}(p_\rho \,\|\, q_K) = \frac{1+\rho}{2} \log \frac{1+\rho}{1+\rho(1-1/K)} + \frac{1-\rho}{2} \log \frac{1-\rho}{1-\rho(1-1/K)}.$$
+
+The conditionals of $p_{\rho'}$ with $\rho' = \rho/(1 - 1/K)$, which needs $\rho < 1 - 1/K$, give $q_K = p_\rho$, so the KL is zero, although this table has a positive conditional KL against the data. A table with more dependence than the data offsets the independent draws of positions that share a step. For $\rho = 0.4$ and $K = 16$ the two errors are $3.664 \cdot 10^{-4}$ and 0, with $\rho' = 0.4267$.
+
+`tests/test_compensation.py` checks the closed form and the exact output law against the program for five pairs $(\rho, K)$. For the six-position law of the README the same direction helps numerically, see `scripts/compensation.py`.
