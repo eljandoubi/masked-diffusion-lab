@@ -126,7 +126,7 @@ Log-log slope of the conditional KL against $n$ (least-squares fits to the 3-see
 
 What the numbers show:
 
-- With few sequences, wider is worse. For $n \le 2000$ the error grows with width (n = 200: 8.8e-2 at width 16, 3.3e-1 at width 128), and at $n = 5000$ widths 16 and 32 tie. Two measurements bear on the reading that the wide networks interpolate the few training sequences. The training loss of width 128 at $n = 200$ is 1.8e-5 above its minimum (relative; the plug-in table reaches the minimum), against 2.8e-2 for width 16 (table below): the wide network gets very close to the minimum of its objective. And the plug-in tables, which involve no training, have a lower conditional KL than all four networks at $n = 200$ (all three $\alpha$) and at $n = 500$ ($\alpha$ = 0.1 and 1). From $n = 1000$ the best network is below all three tables, by a factor 2.2 at $n = 200000$ (1.0e-4 against 2.3e-4). Both measurements fit the interpolation reading, but no run separates the error on contexts that occur in the training sequences from the error on contexts that no training sequence reaches, where the training loss puts no weight, and no network with weight decay or early stopping was run. Interpolation is therefore not isolated as the cause.
+- With few sequences, wider is worse. For $n \le 2000$ the error grows with width (n = 200: 8.8e-2 at width 16, 3.3e-1 at width 128), and at $n = 5000$ widths 16 and 32 tie. Two measurements bear on the reading that the wide networks interpolate the few training sequences. The training loss of width 128 at $n = 200$ is 1.8e-5 above its minimum (relative; the plug-in table reaches the minimum), against 2.8e-2 for width 16 (table below): the wide network gets very close to the minimum of its objective. And the plug-in tables, which involve no training, have a lower conditional KL than all four networks at $n = 200$ (all three $\alpha$) and at $n = 500$ ($\alpha$ = 0.1 and 1). From $n = 1000$ the best network is below all three tables, by a factor 2.2 at $n = 200000$ (1.0e-4 against 2.3e-4). Both measurements fit the interpolation reading, and two interventions below test it: early stopping, and the split of the error over contexts that the training sequences reach or miss.
 - Over the whole range of $n$ the fits give slopes -1.06, -1.19 and -1.20 for widths 32, 64 and 128. They include the small-data regime, so they are not a large-sample rate: in the last window ($n$ from $2 \cdot 10^4$ to $2 \cdot 10^5$) the slopes are -0.76, -1.05 and -1.16, so width 32 has flattened while widths 64 and 128 still fall at about $n^{-1}$. Width 16 flattens near 1e-3 (slope -0.21 in the last window); in seed 0, three times the iterations lowered its error at $n = 200000$ from 1.19e-3 to 8.9e-4 (budget table). Three seeds and the budget sensitivity below do not establish an exponent.
 - Width at which the error stops improving, taken as the smallest width within 10% of the best mean: 16 for $n \le 5000$, 32 for $n$ from $10^4$ to $5 \cdot 10^4$, 64 for $n \ge 10^5$. Width 128 is never the best: it is above width 64 in all 30 seed-paired cells (10 sizes, 3 seeds). At $n = 200000$ width 64 has the lowest mean (1.0e-4) and width 128 is above it in all 3 seeds, by 0.75e-5 to 2.15e-5 (ratios 1.07 to 1.21). The mean difference, 1.5e-5, has a 95% t interval over the 3 pairs of -0.2e-5 to 3.3e-5, which includes 0. `python scripts/report.py` prints every paired difference.
 - The exact-conditional value is a reference, not a floor. With learned conditionals the K = 16 KL never fell below it in these runs (smallest ratio over the 120 runs: 1.003), and for $n \ge 10^5$ and widths 32 to 128 all 18 runs are within 6.1% of it. The loss that more data approaches, its expectation over the data law, is minimised by the exact conditionals, whose K = 16 sampler has this error, so more data did not remove it here while more steps do (section 1). With 200 sequences the sampler KL is 14 to 20 times the exact-conditional value. At $n = 200000$ the plug-in tables have K = 16 KL 1.88e-2 ($\alpha$ = 0.01 and 0.1) and 1.94e-2 ($\alpha$ = 1) against 1.81e-2 for the best network, so all of them are within 11% of the exact-conditional value. Other tables can go below it, see section 3.
@@ -138,6 +138,31 @@ Training loss above its minimum, relative, mean over 3 seeds (the minimum is the
 | 200 | 2.821e-02 | 4.462e-03 | 2.333e-04 | 1.753e-05 |
 | 2000 | 1.752e-02 | 8.039e-03 | 3.079e-03 | 6.481e-04 |
 | 200000 | 2.443e-03 | 5.389e-04 | 3.254e-04 | 2.287e-04 |
+
+Early stopping: the same runs with L-BFGS stopped after 100 iterations (a budget fixed before the runs and not tuned, one value, 3 seeds, `results/denoiser_markov_stop100.json`) against the 2000 iterations of the main grid:
+
+| n | iterations | width 16 | width 32 | width 64 | width 128 | width 128 / width 16 |
+|---|---|---|---|---|---|---|
+| 200 | 100 | 3.986e-02 | 4.443e-02 | 5.033e-02 | 5.558e-02 | 1.39 |
+| 200 | 2000 | 8.844e-02 | 1.613e-01 | 2.672e-01 | 3.309e-01 | 3.74 |
+| 2000 | 100 | 1.315e-02 | 9.296e-03 | 7.872e-03 | 6.970e-03 | 0.53 |
+| 2000 | 2000 | 8.098e-03 | 1.125e-02 | 1.744e-02 | 2.798e-02 | 3.46 |
+
+Stopping early lowers the error of the wide network by a factor 6 at $n = 200$ (width 128: 3.3e-1 to 5.6e-2) and reverses the order of the widths at $n = 2000$ (after 100 iterations width 128 has the lowest error, 7.0e-3, against 8.1e-3 for the best network after 2000). At $n = 200$ wider is still worse after 100 iterations, but the ratio of widths 128 and 16 falls from 3.7 to 1.4, and widths 16 and 32 are below the best plug-in table (4.9e-2). The stopped networks are far from interpolating: at $n = 200$ their training loss is 3.0e-2 (width 128) to 7.7e-2 (width 16) above its minimum, against 1.8e-5 and 2.8e-2 after 2000 iterations.
+
+The second intervention is a split of the error. A partial sequence is reached when at least one training sequence matches its known positions, and the training loss puts no weight on the others. At $n = 200$ the others carry 3% of the error weight, and 20% to 25% of the error of the four networks (6.7e-2 of the 3.3e-1 of width 128), so 75% to 80% of the error is on reached partial sequences, where the loss constrains the network (`scripts/contexts.py`, `results/contexts.json`, which re-trains the networks of $n = 200$ and 2000, 24 per law, with results identical to the main grid):
+
+| model | cond KL | on reached | on unreached | share of the error on unreached |
+|---|---|---|---|---|
+| width 16 | 8.844e-02 | 6.611e-02 | 2.233e-02 | 0.25 |
+| width 32 | 1.613e-01 | 1.224e-01 | 3.895e-02 | 0.24 |
+| width 64 | 2.672e-01 | 2.093e-01 | 5.793e-02 | 0.22 |
+| width 128 | 3.309e-01 | 2.644e-01 | 6.652e-02 | 0.20 |
+| plug-in 0.01 | 8.297e-02 | 7.019e-02 | 1.278e-02 | 0.15 |
+| plug-in 0.1 | 4.946e-02 | 3.669e-02 | 1.278e-02 | 0.26 |
+| plug-in 1 | 6.142e-02 | 4.864e-02 | 1.278e-02 | 0.21 |
+
+The growth of the error with width at $n = 200$ is therefore a growth on the reached partial sequences (6.6e-2 at width 16, 2.6e-1 at width 128), not an effect of extrapolation to the unreached ones. At $n = 2000$ the unreached share is 5% to 7%. Taken together, the training-loss gap, the early stopping and the split support the reading that the width effect at small $n$ comes from fitting the training sequences closely. This holds for two sizes, one stopping budget and 3 seeds, and no network with weight decay was run.
 
 Sampled $t$ against the exact expectation, mean over 3 seeds (sampled: Adam, batch 2048, 12000 steps; sub-grid of widths 16 and 128):
 
@@ -203,6 +228,17 @@ The plug-in tables again beat every network at $n = 200$ ($\alpha$ = 0.1 and 1) 
 | 2000 | 2.239e-02 | 1.458e-02 | 7.280e-03 | 1.961e-03 |
 | 200000 | 1.705e-03 | 3.038e-04 | 1.921e-04 | 8.335e-05 |
 
+Early stopping at 100 iterations, as for the Markov law (`results/denoiser_potts_stop100.json`), against the 2000 iterations of the main grid:
+
+| n | iterations | width 16 | width 32 | width 64 | width 128 | width 128 / width 16 |
+|---|---|---|---|---|---|---|
+| 200 | 100 | 6.203e-02 | 9.763e-02 | 1.261e-01 | 1.741e-01 | 2.81 |
+| 200 | 2000 | 1.506e-01 | 2.441e-01 | 5.131e-01 | 1.034e+00 | 6.86 |
+| 2000 | 100 | 6.660e-03 | 6.810e-03 | 7.582e-03 | 8.381e-03 | 1.26 |
+| 2000 | 2000 | 1.117e-02 | 1.632e-02 | 2.548e-02 | 4.135e-02 | 3.70 |
+
+It lowers the error of width 128 from 1.034 to 1.7e-1 at $n = 200$ and from 4.1e-2 to 8.4e-3 at $n = 2000$. The width effect shrinks (the ratio of widths 128 and 16 goes from 6.9 to 2.8 and from 3.7 to 1.3) but, unlike the Markov law at $n = 2000$, it does not reverse. The partial sequences that no training sequence reaches again carry little of the error: 6% of the error weight and 21% to 22% of the error of the networks at $n = 200$, and 1% to 2% of it at $n = 2000$.
+
 Sampled $t$ against the exact expectation, mean over 3 seeds, for the same widths and sizes as on the Markov law:
 
 | width | n | cond KL exact | cond KL sampled | K = 16 exact | K = 16 sampled |
@@ -263,13 +299,13 @@ src/maskdiff/sampler.py       exact K-step sampler law (dynamic program), Monte 
 src/maskdiff/asymptotics.py   tie probability and the large-K coefficient
 src/maskdiff/metrics.py       KL, log-log slope, paired t interval, exact error of model conditionals
 src/maskdiff/denoiser.py      MLP denoiser, exact-expectation and sampled-t training
-scripts/                      sampler_error.py, denoiser_study.py, compensation.py, baseline.py, report.py
+scripts/                      sampler_error.py, denoiser_study.py, compensation.py, baseline.py, contexts.py, report.py
 tests/                        the checks listed below, 10 to 20 s on a laptop
 results/                      the JSON and PNG files that the tables above come from
 docs/derivations.md           the derivations
 ```
 
-The tests check, among others: enumerated laws sum to 1; the forward masking rate is $t$; the closed-form negative ELBO against the pattern sum integrated over $t$ and against the average over orderings, and its equality with $-\log p(x)$ for exact conditionals; the sampler law sums to 1, equals the data law for product laws and for one position per step, equals the product of marginals at K = 1, equals an explicit sum over reveal steps, and matches $10^6$ simulated sequences; the discrete-time ELBO of the sampler against its Riemann sum and against $\log q_K$; the large-K coefficient against the program up to K = 2048; the training loss against its exact expectation; the exact error measures against explicit sums; the plug-in conditionals against hand-counted tables, and the smallest training loss against the entropy and against the loss of other tables; the paired t interval against its coverage; conditionals that beat the exact ones, with a closed form for two positions.
+The tests check, among others: enumerated laws sum to 1; the forward masking rate is $t$; the closed-form negative ELBO against the pattern sum integrated over $t$ and against the average over orderings, and its equality with $-\log p(x)$ for exact conditionals; the sampler law sums to 1, equals the data law for product laws and for one position per step, equals the product of marginals at K = 1, equals an explicit sum over reveal steps, and matches $10^6$ simulated sequences; the discrete-time ELBO of the sampler against its Riemann sum and against $\log q_K$; the large-K coefficient against the program up to K = 2048; the training loss against its exact expectation; the exact error measures against explicit sums; the plug-in conditionals against hand-counted tables, and the smallest training loss against the entropy and against the loss of other tables; the paired t interval against its coverage; the split of the error over reached and unreached partial sequences against the total; conditionals that beat the exact ones, with a closed form for two positions.
 
 ## Reproduce
 
@@ -284,11 +320,14 @@ python scripts/denoiser_study.py --law markov --workers 5         # about 25 min
 python scripts/denoiser_study.py --law potts --workers 5 --skip-sampled --skip-checks   # about 12 min
 python scripts/denoiser_study.py --law potts --workers 5 --extend   # about 11 min, adds the sampled-t runs and the budget checks to the Potts json
 python scripts/baseline.py                                        # a few minutes, writes results/baseline.json
+python scripts/contexts.py --workers 5                            # about 5 min, writes results/contexts.json
+python scripts/denoiser_study.py --law markov --workers 3 --iterations 100 --sizes 200 2000 --skip-sampled --skip-checks --name denoiser_markov_stop100   # about 30 s, early stopping; the png it writes is not kept
+python scripts/denoiser_study.py --law potts --workers 3 --iterations 100 --sizes 200 2000 --skip-sampled --skip-checks --name denoiser_potts_stop100   # about 30 s, same for the Potts law
 python scripts/compensation.py                                    # a few seconds, writes results/compensation.json
 python scripts/report.py                                          # prints the tables of this page
 ```
 
-The times are from a laptop that other jobs were using (load average 4.5, 10.7, 22 and 11.5 when the sampler study, the Markov study, the Potts grid and the Potts extension ended). Every training run is seeded and deterministic on one CPU thread, so a rerun gives the same numbers up to floating point: the four seed-0 cells of the Potts grid that the extension ran again matched the committed values exactly.
+The times are from a laptop that other jobs were using (load average 4.5, 10.7, 22 and 11.5 when the sampler study, the Markov study, the Potts grid and the Potts extension ended, 15.6 for the contexts study). Every training run is seeded and deterministic on one CPU thread, so a rerun gives the same numbers up to floating point: the four seed-0 cells of the Potts grid that the extension ran again matched the committed values exactly.
 
 ## Method notes
 
@@ -301,6 +340,7 @@ The times are from a laptop that other jobs were using (load average 4.5, 10.7, 
 - Denoiser: input is the one-hot code of each position over $V + 1$ symbols (the mask is symbol $V$), two hidden ReLU layers of the stated width, output is $L \times V$ logits, one softmax per position. The loss counts masked positions only.
 - Training objective: $t$ uniform, mask rate $t$, weight $1/\max(t, 0.05)$, on $n$ sequences drawn from the data law. The main grid takes the expectation over $t$, the mask pattern and the sequences (their empirical law) exactly and minimises it with L-BFGS (full batch, at most 2000 iterations, float64), so training has no sampling noise. The number of iterations used was not recorded in the two main grids. The 8 Potts runs of the budget check all used their whole cap (2000 and 6000 iterations). The sampled-$t$ trainer is Adam with batch 2048, 12000 steps and learning rate 3e-3 with cosine decay to 3e-5. This recipe was chosen on the Markov law after looking at its exact error, in earlier runs that are not in the repo.
 - Plug-in table: for a partial sequence with a masked position, the count of training sequences that match its known positions and carry the symbol, plus $\alpha$, over the count of those that match plus $V\alpha$. Contexts that no training sequence reaches therefore get uniform conditionals. The smallest value of the training loss is reached by the same table with $\alpha = 0$ on the contexts that occur.
+- Reached partial sequences: a partial sequence is reached by a training set when at least one training sequence matches its known positions. The others carry no weight in the training loss, so the training sequences do not constrain the network there. The conditional KL is a sum over partial sequences and splits over the two sets (`Reference.conditional_kl(table, only)`). `Reference.exposure(only)` is the share of the error weight on a set, that is the same sum with a KL of 1 at every masked position.
 - No validation set and no early stopping. The exact error was used to choose the training method just described, on the Markov law, and for nothing else; the three $\alpha$ were fixed before any run and none was chosen on the errors. The data law is the test.
 - "Width at which the error stops improving": the smallest width whose mean error over the 3 seeds is within 10% of the best width at that $n$. Slopes are fitted to the means over seeds on the stated ranges of $n$.
 - Paired differences between widths use the same training sample for both widths (the seed and $n$ fix it) and a two-sided 95% t interval with 2 degrees of freedom (quantile 4.303), `maskdiff.metrics.paired_interval`.
@@ -321,7 +361,7 @@ Derivations in seven lines (`docs/derivations.md`):
 - The sampler analysis covers the uniform time grid with independent reveals, and equal groups in random order. Other schedules, confidence-based ordering and remasking samplers are not studied. The formula for $c$ needs $p > 0$ and is checked numerically, not proved beyond the $O(K^{-2})$ bound.
 - The denoiser results come from one architecture family, one loss weighting and 3 seeds, and no network is regularised. Slopes are descriptive fits to 3-seed means with a seed to seed spread of up to 50%, so differences of 0.1 in slope mean little, and an interval over 3 seeds is wide (4.3 standard errors). The training recipe matters: tripling the training length moved single-seed errors by up to a factor 2.2 (Markov law, sampled trainer) and 2.1 (Potts law, exact trainer), in both directions depending on width, $n$ and trainer, and the sampled-$t$ trainer (2 widths, 4 sample sizes) differs from the exact expectation by up to a factor 3.2 (Markov) and 2.2 (Potts). The numbers describe the stated recipe and budget, not the best possible training. These are measurements on small cases, not a theorem.
 - The recipe was chosen on the Markov law after looking at its exact error, in earlier runs that are not in the repo, so the Markov numbers are not a confirmation of it. The Potts law was not used for any choice and repeats the trainer and budget comparisons with the same direction in six of eight cells, one seed per cell. Both laws are exploratory.
-- The only non-neural reference is the plug-in table with three fixed smoothing values. No network with weight decay or early stopping was run, and the error on contexts that occur in the training sequences was not separated from the error on contexts that do not, so the cause of the width effect at small $n$ is not isolated.
+- The only non-neural reference is the plug-in table with three fixed smoothing values. Early stopping was tried at one budget (100 iterations, fixed before the runs) and the error was split over reached and unreached partial sequences at two sizes ($n = 200$ and 2000), which supports fitting the training sequences as the source of the width effect at small $n$. No network with weight decay was run, other stopping budgets were not tried, and the argument does not cover larger $n$ or other architectures.
 - The exact-conditional value of the sampler is a reference, not a lower bound (section 3). The statements that learned samplers stay above it describe these runs only.
 
 ## License
