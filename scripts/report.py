@@ -88,9 +88,11 @@ def equal_count_table(report: dict, family: str, length: int, vocab: int) -> str
     return table(header, rows)
 
 
-def cell_values(report: dict, key: str) -> dict[tuple[int, int], np.ndarray]:
+def cell_values(
+    report: dict, key: str, group: str = "runs"
+) -> dict[tuple[int, int], np.ndarray]:
     cells: dict[tuple[int, int], list[float]] = {}
-    for run in report["runs"]:
+    for run in report[group]:
         cells.setdefault((run["width"], run["n"]), []).append(run[key])
     return {k: np.array(v) for k, v in cells.items()}
 
@@ -142,24 +144,52 @@ def spread(report: dict) -> str:
     )
 
 
-def budget_table(report: dict) -> str:
-    cells = cell_values(report, "cond_kl")
+def budget_table(report: dict, check: str, base: str) -> str:
+    """Seed 0 of the main grid against the same cell with a three times longer run."""
     rows = []
-    for run in report["budget_check"]:
-        base = cells[(run["width"], run["n"])]
+    for run in report[check]:
+        first = next(
+            r
+            for r in report[base]
+            if (r["width"], r["n"], r["seed"]) == (run["width"], run["n"], 0)
+        )
         rows.append(
             [
                 str(run["width"]),
                 str(run["n"]),
-                sci(base[0]),
-                sci(run["cond_kl"]),
-                str(run["steps"]),
+                f"{first['budget']}: {sci(first['cond_kl'])}",
+                f"{run['budget']}: {sci(run['cond_kl'])}",
             ]
         )
-    return table(
-        ["width", "n", "cond KL, 8000 steps (seed 0)", "cond KL, longer run", "steps"],
-        rows,
-    )
+    return table(["width", "n", "budget: cond KL", "3x budget: cond KL"], rows)
+
+
+def trainer_table(report: dict) -> str:
+    exact = cell_values(report, "cond_kl")
+    sampled = cell_values(report, "cond_kl", "sampled_runs")
+    exact_k = cell_values(report, "sampler_kl")
+    sampled_k = cell_values(report, "sampler_kl", "sampled_runs")
+    rows = []
+    for width, n in sorted(sampled, key=lambda cell: (cell[0], cell[1])):
+        rows.append(
+            [
+                str(width),
+                str(n),
+                sci(exact[(width, n)].mean()),
+                sci(sampled[(width, n)].mean()),
+                sci(exact_k[(width, n)].mean()),
+                sci(sampled_k[(width, n)].mean()),
+            ]
+        )
+    header = [
+        "width",
+        "n",
+        "cond KL exact",
+        "cond KL sampled",
+        "K=16 exact",
+        "K=16 sampled",
+    ]
+    return table(header, rows)
 
 
 def run_note(report: dict) -> str:
@@ -204,8 +234,14 @@ def main() -> None:
         print("### width at which the error stops improving\n")
         print(plateau_widths(report), "\n")
         if report["budget_check"]:
-            print("### step budget check\n")
-            print(budget_table(report), "\n")
+            print("### budget check, exact trainer (L-BFGS iterations)\n")
+            print(budget_table(report, "budget_check", "runs"), "\n")
+        if report["sampled_runs"]:
+            print("### exact against sampled-t training\n")
+            print(trainer_table(report), "\n")
+        if report["sampled_budget_check"]:
+            print("### budget check, sampled-t trainer (Adam steps)\n")
+            print(budget_table(report, "sampled_budget_check", "sampled_runs"), "\n")
 
 
 if __name__ == "__main__":
