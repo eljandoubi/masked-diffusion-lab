@@ -81,35 +81,35 @@ A two-hidden-layer MLP (ReLU, width 16, 32, 64 or 128) reads the one-hot code of
 
 Two errors, both exact. The conditional KL: draw $t$ uniformly and a mask pattern from the forward process, then average the KL between the true and the learned conditional over the masked positions (the ELBO gap divided by $L + 1$). And the KL of the K = 16 sampler that runs on the learned conditionals. Both use the unclipped ELBO weights, while training uses the clipped weight, so the training loss is not the ELBO for $t$ below 0.05. As a non-neural reference, the plug-in table holds the conditional frequencies of the same $n$ training sequences with $\alpha$ added to every count (contexts that no sequence reaches get uniform conditionals). $\alpha$ = 0.01, 0.1 and 1 were fixed before any run, all three are reported, and none was chosen on the errors (`scripts/baseline.py`, `results/baseline.json`). Law: Markov chain with persistence 0.8, $L = 6$, $V = 3$ (entropy 3.524, total correlation 3.068). With the exact conditionals the K = 16 sampler has KL 1.751e-02, called the exact-conditional value below. Everything below, up to the second law, is in `results/denoiser_markov.json` and `results/baseline.json`.
 
-Conditional KL, mean over 3 seeds (the seed to seed standard deviation over the mean is 0.14 in the median cell and 0.50 at most):
+Conditional KL, mean over 3 seeds, with the plug-in tables built on the same samples (for the networks, the relative standard deviation over the 3 seeds, sd/mean, is 0.14 in the median cell and 0.50 at most):
 
-| n | width 16 | width 32 | width 64 | width 128 |
-|---|---|---|---|---|
-| 200 | 8.844e-02 | 1.613e-01 | 2.672e-01 | 3.309e-01 |
-| 500 | 4.150e-02 | 7.595e-02 | 1.245e-01 | 1.724e-01 |
-| 1000 | 1.888e-02 | 2.969e-02 | 4.968e-02 | 7.617e-02 |
-| 2000 | 8.098e-03 | 1.125e-02 | 1.744e-02 | 2.798e-02 |
-| 5000 | 3.600e-03 | 3.587e-03 | 5.325e-03 | 7.820e-03 |
-| 10000 | 2.043e-03 | 1.759e-03 | 2.508e-03 | 3.658e-03 |
-| 20000 | 1.640e-03 | 8.904e-04 | 1.135e-03 | 1.702e-03 |
-| 50000 | 1.128e-03 | 3.553e-04 | 3.754e-04 | 5.369e-04 |
-| 100000 | 8.047e-04 | 2.153e-04 | 1.838e-04 | 2.446e-04 |
-| 200000 | 1.103e-03 | 1.585e-04 | 1.016e-04 | 1.170e-04 |
+| n | width 16 | width 32 | width 64 | width 128 | plug-in 0.01 | plug-in 0.1 | plug-in 1 |
+|---|---|---|---|---|---|---|---|
+| 200 | 8.844e-02 | 1.613e-01 | 2.672e-01 | 3.309e-01 | 8.297e-02 | 4.946e-02 | 6.142e-02 |
+| 500 | 4.150e-02 | 7.595e-02 | 1.245e-01 | 1.724e-01 | 6.130e-02 | 3.472e-02 | 3.418e-02 |
+| 1000 | 1.888e-02 | 2.969e-02 | 4.968e-02 | 7.617e-02 | 4.429e-02 | 2.551e-02 | 2.280e-02 |
+| 2000 | 8.098e-03 | 1.125e-02 | 1.744e-02 | 2.798e-02 | 2.348e-02 | 1.373e-02 | 1.308e-02 |
+| 5000 | 3.600e-03 | 3.587e-03 | 5.325e-03 | 7.820e-03 | 1.000e-02 | 5.939e-03 | 6.152e-03 |
+| 10000 | 2.043e-03 | 1.759e-03 | 2.508e-03 | 3.658e-03 | 6.635e-03 | 3.904e-03 | 3.558e-03 |
+| 20000 | 1.640e-03 | 8.904e-04 | 1.135e-03 | 1.702e-03 | 4.052e-03 | 2.448e-03 | 2.000e-03 |
+| 50000 | 1.128e-03 | 3.553e-04 | 3.754e-04 | 5.369e-04 | 1.376e-03 | 9.349e-04 | 8.630e-04 |
+| 100000 | 8.047e-04 | 2.153e-04 | 1.838e-04 | 2.446e-04 | 7.319e-04 | 4.775e-04 | 4.253e-04 |
+| 200000 | 1.103e-03 | 1.585e-04 | 1.016e-04 | 1.170e-04 | 4.084e-04 | 2.724e-04 | 2.255e-04 |
 
 KL of the K = 16 sampler on the learned conditionals, mean over 3 seeds (exact conditionals: 1.751e-02):
 
-| n | width 16 | width 32 | width 64 | width 128 |
-|---|---|---|---|---|
-| 200 | 2.459e-01 | 3.192e-01 | 3.414e-01 | 3.477e-01 |
-| 500 | 1.254e-01 | 1.753e-01 | 2.005e-01 | 2.122e-01 |
-| 1000 | 8.910e-02 | 1.126e-01 | 1.437e-01 | 1.547e-01 |
-| 2000 | 4.533e-02 | 5.400e-02 | 6.908e-02 | 8.113e-02 |
-| 5000 | 3.176e-02 | 3.209e-02 | 3.805e-02 | 4.404e-02 |
-| 10000 | 2.565e-02 | 2.434e-02 | 2.729e-02 | 3.091e-02 |
-| 20000 | 2.485e-02 | 2.211e-02 | 2.299e-02 | 2.518e-02 |
-| 50000 | 2.169e-02 | 1.900e-02 | 1.912e-02 | 1.981e-02 |
-| 100000 | 2.056e-02 | 1.837e-02 | 1.822e-02 | 1.847e-02 |
-| 200000 | 2.172e-02 | 1.831e-02 | 1.810e-02 | 1.816e-02 |
+| n | width 16 | width 32 | width 64 | width 128 | plug-in 0.01 | plug-in 0.1 | plug-in 1 |
+|---|---|---|---|---|---|---|---|
+| 200 | 2.459e-01 | 3.192e-01 | 3.414e-01 | 3.477e-01 | 3.421e-01 | 2.783e-01 | 4.045e-01 |
+| 500 | 1.254e-01 | 1.753e-01 | 2.005e-01 | 2.122e-01 | 2.243e-01 | 1.798e-01 | 2.238e-01 |
+| 1000 | 8.910e-02 | 1.126e-01 | 1.437e-01 | 1.547e-01 | 1.704e-01 | 1.434e-01 | 1.634e-01 |
+| 2000 | 4.533e-02 | 5.400e-02 | 6.908e-02 | 8.113e-02 | 9.149e-02 | 8.027e-02 | 1.003e-01 |
+| 5000 | 3.176e-02 | 3.209e-02 | 3.805e-02 | 4.404e-02 | 5.060e-02 | 4.660e-02 | 5.995e-02 |
+| 10000 | 2.565e-02 | 2.434e-02 | 2.729e-02 | 3.091e-02 | 3.714e-02 | 3.512e-02 | 4.204e-02 |
+| 20000 | 2.485e-02 | 2.211e-02 | 2.299e-02 | 2.518e-02 | 2.974e-02 | 2.886e-02 | 3.241e-02 |
+| 50000 | 2.169e-02 | 1.900e-02 | 1.912e-02 | 1.981e-02 | 2.180e-02 | 2.168e-02 | 2.383e-02 |
+| 100000 | 2.056e-02 | 1.837e-02 | 1.822e-02 | 1.847e-02 | 1.960e-02 | 1.956e-02 | 2.074e-02 |
+| 200000 | 2.172e-02 | 1.831e-02 | 1.810e-02 | 1.816e-02 | 1.878e-02 | 1.878e-02 | 1.941e-02 |
 
 ![Conditional KL and sampler KL against the number of training sequences](results/denoiser_markov.png)
 
@@ -126,10 +126,18 @@ Log-log slope of the conditional KL against $n$ (least-squares fits to the 3-see
 
 What the numbers show:
 
-- With few sequences, wider is worse. For $n \le 2000$ the error grows with width (n = 200: 8.8e-2 at width 16, 3.3e-1 at width 128), and at $n = 5000$ widths 16 and 32 tie. There is no regularisation and no early stopping, which is consistent with the wide networks interpolating the few training sequences.
-- Over the whole range of $n$ the fits give slopes -1.06, -1.19 and -1.20 for widths 32, 64 and 128. They include the small-data regime, so they are not a large-sample rate: in the last window ($n$ from $2 \cdot 10^4$ to $2 \cdot 10^5$) the slopes are -0.76, -1.05 and -1.16, so width 32 has flattened while widths 64 and 128 still fall at about $n^{-1}$. Width 16 flattens near 1e-3 (slope -0.21 in the last window), where its 2000 iterations are also not enough, see the budget table. Three seeds and the budget sensitivity below do not establish an exponent.
-- Width at which the error stops improving, taken as the smallest width within 10% of the best mean: 16 for $n \le 5000$, 32 for $n$ from $10^4$ to $5 \cdot 10^4$, 64 for $n \ge 10^5$. Width 128 is never the best. At $n = 200000$ widths 64 and 128 differ by 1.0e-4 against 1.2e-4, inside the seed spread.
-- The exact-conditional value is a reference, not a floor. With learned conditionals the K = 16 KL never fell below it in these runs (smallest ratio over the 120 runs: 1.003), and for $n \ge 10^5$ and widths 32 to 128 all 18 runs are within 6.1% of it. The loss that more data approaches, its expectation over the data law, is minimised by the exact conditionals, whose K = 16 sampler has this error, so more data did not remove it here while more steps do (section 1). With 200 sequences the sampler KL is 14 to 20 times the exact-conditional value. Other tables can go below it, see section 3.
+- With few sequences, wider is worse. For $n \le 2000$ the error grows with width (n = 200: 8.8e-2 at width 16, 3.3e-1 at width 128), and at $n = 5000$ widths 16 and 32 tie. Two measurements bear on the reading that the wide networks interpolate the few training sequences. The training loss of width 128 at $n = 200$ is 1.8e-5 above its minimum (relative; the plug-in table reaches the minimum), against 2.8e-2 for width 16 (table below): the wide network gets very close to the minimum of its objective. And the plug-in tables, which involve no training, have a lower conditional KL than all four networks at $n = 200$ (all three $\alpha$) and at $n = 500$ ($\alpha$ = 0.1 and 1). From $n = 1000$ the best network is below all three tables, by a factor 2.2 at $n = 200000$ (1.0e-4 against 2.3e-4). Both measurements fit the interpolation reading, but no run separates the error on contexts that occur in the training sequences from the error on contexts that no training sequence reaches, where the training loss puts no weight, and no network with weight decay or early stopping was run. Interpolation is therefore not isolated as the cause.
+- Over the whole range of $n$ the fits give slopes -1.06, -1.19 and -1.20 for widths 32, 64 and 128. They include the small-data regime, so they are not a large-sample rate: in the last window ($n$ from $2 \cdot 10^4$ to $2 \cdot 10^5$) the slopes are -0.76, -1.05 and -1.16, so width 32 has flattened while widths 64 and 128 still fall at about $n^{-1}$. Width 16 flattens near 1e-3 (slope -0.21 in the last window); in seed 0, three times the iterations lowered its error at $n = 200000$ from 1.19e-3 to 8.9e-4 (budget table). Three seeds and the budget sensitivity below do not establish an exponent.
+- Width at which the error stops improving, taken as the smallest width within 10% of the best mean: 16 for $n \le 5000$, 32 for $n$ from $10^4$ to $5 \cdot 10^4$, 64 for $n \ge 10^5$. Width 128 is never the best: it is above width 64 in all 30 seed-paired cells (10 sizes, 3 seeds). At $n = 200000$ width 64 has the lowest mean (1.0e-4) and width 128 is above it in all 3 seeds, by 0.75e-5 to 2.15e-5 (ratios 1.07 to 1.21). The mean difference, 1.5e-5, has a 95% t interval over the 3 pairs of -0.2e-5 to 3.3e-5, which includes 0. `python scripts/report.py` prints every paired difference.
+- The exact-conditional value is a reference, not a floor. With learned conditionals the K = 16 KL never fell below it in these runs (smallest ratio over the 120 runs: 1.003), and for $n \ge 10^5$ and widths 32 to 128 all 18 runs are within 6.1% of it. The loss that more data approaches, its expectation over the data law, is minimised by the exact conditionals, whose K = 16 sampler has this error, so more data did not remove it here while more steps do (section 1). With 200 sequences the sampler KL is 14 to 20 times the exact-conditional value. At $n = 200000$ the plug-in tables have K = 16 KL 1.88e-2 ($\alpha$ = 0.01 and 0.1) and 1.94e-2 ($\alpha$ = 1) against 1.81e-2 for the best network, so all of them are within 11% of the exact-conditional value. Other tables can go below it, see section 3.
+
+Training loss above its minimum, relative, mean over 3 seeds (the minimum is the loss of the plug-in table, `elbo.minimum_loss`; no run ended below it):
+
+| n | width 16 | width 32 | width 64 | width 128 |
+|---|---|---|---|---|
+| 200 | 2.821e-02 | 4.462e-03 | 2.333e-04 | 1.753e-05 |
+| 2000 | 1.752e-02 | 8.039e-03 | 3.079e-03 | 6.481e-04 |
+| 200000 | 2.443e-03 | 5.389e-04 | 3.254e-04 | 2.287e-04 |
 
 Sampled $t$ against the exact expectation, mean over 3 seeds (sampled: Adam, batch 2048, 12000 steps; sub-grid of widths 16 and 128):
 
@@ -148,33 +156,33 @@ Both trainers show the same shape: wide networks are worse with few sequences an
 
 Budget check, seed 0 only, each cell against a run three times as long (exact: L-BFGS iterations, 2000 against 6000; sampled: Adam steps, 12000 against 36000):
 
-| trainer | width | n | cond KL | cond KL, 3x budget |
-|---|---|---|---|---|
-| exact | 16 | 2000 | 6.996e-03 | 7.007e-03 |
-| exact | 128 | 2000 | 2.325e-02 | 4.031e-02 |
-| exact | 16 | 200000 | 1.192e-03 | 8.919e-04 |
-| exact | 128 | 200000 | 1.217e-04 | 1.644e-04 |
-| sampled | 16 | 2000 | 7.096e-03 | 6.635e-03 |
-| sampled | 128 | 2000 | 1.339e-02 | 2.928e-02 |
-| sampled | 16 | 200000 | 3.624e-03 | 2.014e-03 |
-| sampled | 128 | 200000 | 2.620e-04 | 1.745e-04 |
+| trainer | width | n | cond KL | cond KL, 3x budget | 3x / 1x |
+|---|---|---|---|---|---|
+| exact | 16 | 2000 | 6.996e-03 | 7.007e-03 | 1.00 |
+| exact | 128 | 2000 | 2.325e-02 | 4.031e-02 | 1.73 |
+| exact | 16 | 200000 | 1.192e-03 | 8.919e-04 | 0.75 |
+| exact | 128 | 200000 | 1.217e-04 | 1.644e-04 | 1.35 |
+| sampled | 16 | 2000 | 7.096e-03 | 6.635e-03 | 0.94 |
+| sampled | 128 | 2000 | 1.339e-02 | 2.928e-02 | 2.19 |
+| sampled | 16 | 200000 | 3.624e-03 | 2.014e-03 | 0.56 |
+| sampled | 128 | 200000 | 2.620e-04 | 1.745e-04 | 0.67 |
 
-The effect of a longer run depends on width, $n$ and trainer. With the exact trainer the narrow network at $n = 200000$ improves (1.192e-03 to 8.919e-04) and is unchanged at $n = 2000$, and the wide network gets worse at both $n$ (at $n = 2000$: 2.325e-02 to 4.031e-02), which is consistent with fitting the sampling noise of the training sequences. With the sampled trainer both narrow cells improve, and the wide network gets worse at $n = 2000$ (1.339e-02 to 2.928e-02) but improves at $n = 200000$ (2.620e-04 to 1.745e-04), where it is still limited by optimisation. Each cell is one seed, so these eight comparisons do not support a general statement about overfitting.
+The effect of a longer run depends on width, $n$ and trainer. With the exact trainer the longer run lowers the training loss in all four cells (at width 128, $n = 2000$, from 8.8e-4 to 8.1e-5 above its minimum). The narrow network at $n = 200000$ improves (1.192e-03 to 8.919e-04) and is unchanged at $n = 2000$, while the wide network gets worse at both $n$ (at $n = 2000$: 2.325e-02 to 4.031e-02). A training loss that falls while the error against the data law rises is what fitting the sampling noise of the training sequences would give. With the sampled trainer both narrow cells improve, and the wide network gets worse at $n = 2000$ (1.339e-02 to 2.928e-02) but improves at $n = 200000$ (2.620e-04 to 1.745e-04), where more steps still help. Each cell is one seed, so these eight comparisons do not support a general statement about overfitting.
 
-A second law, the Potts ring with coupling 1.0 (entropy 5.829, total correlation 0.763, K = 16 KL with exact conditionals 3.026e-03), with the exact trainer only (`results/denoiser_potts.json`, figure `results/denoiser_potts.png`). Conditional KL, mean over 3 seeds (seed to seed standard deviation over the mean: 0.06 in the median cell, 0.34 at most):
+A second law, the Potts ring with coupling 1.0 (entropy 5.829, total correlation 0.763, K = 16 KL with exact conditionals 3.026e-03). It was not used to choose the training recipe. The exact trainer ran on the whole grid, and the sampled-$t$ trainer and the budget checks on the same sub-grid as for the Markov law (`results/denoiser_potts.json`, figure `results/denoiser_potts.png`, plug-in tables in `results/baseline.json`). Conditional KL, mean over 3 seeds, with the plug-in tables (for the networks, the relative standard deviation over the 3 seeds is 0.06 in the median cell and 0.34 at most):
 
-| n | width 16 | width 32 | width 64 | width 128 |
-|---|---|---|---|---|
-| 200 | 1.506e-01 | 2.441e-01 | 5.131e-01 | 1.034e+00 |
-| 500 | 4.533e-02 | 9.048e-02 | 1.530e-01 | 3.403e-01 |
-| 1000 | 2.154e-02 | 3.580e-02 | 5.827e-02 | 1.075e-01 |
-| 2000 | 1.117e-02 | 1.632e-02 | 2.548e-02 | 4.135e-02 |
-| 5000 | 4.790e-03 | 5.879e-03 | 8.502e-03 | 1.156e-02 |
-| 10000 | 2.455e-03 | 2.644e-03 | 3.605e-03 | 4.916e-03 |
-| 20000 | 1.718e-03 | 1.170e-03 | 1.651e-03 | 2.291e-03 |
-| 50000 | 1.160e-03 | 3.756e-04 | 5.491e-04 | 8.204e-04 |
-| 100000 | 1.215e-03 | 2.163e-04 | 2.646e-04 | 3.894e-04 |
-| 200000 | 1.246e-03 | 1.344e-04 | 1.319e-04 | 1.871e-04 |
+| n | width 16 | width 32 | width 64 | width 128 | plug-in 0.01 | plug-in 0.1 | plug-in 1 |
+|---|---|---|---|---|---|---|---|
+| 200 | 1.506e-01 | 2.441e-01 | 5.131e-01 | 1.034e+00 | 2.807e-01 | 1.298e-01 | 5.424e-02 |
+| 500 | 4.533e-02 | 9.048e-02 | 1.530e-01 | 3.403e-01 | 1.759e-01 | 8.602e-02 | 3.707e-02 |
+| 1000 | 2.154e-02 | 3.580e-02 | 5.827e-02 | 1.075e-01 | 1.053e-01 | 5.505e-02 | 2.609e-02 |
+| 2000 | 1.117e-02 | 1.632e-02 | 2.548e-02 | 4.135e-02 | 5.888e-02 | 3.235e-02 | 1.537e-02 |
+| 5000 | 4.790e-03 | 5.879e-03 | 8.502e-03 | 1.156e-02 | 2.010e-02 | 1.340e-02 | 8.171e-03 |
+| 10000 | 2.455e-03 | 2.644e-03 | 3.605e-03 | 4.916e-03 | 8.095e-03 | 6.178e-03 | 4.388e-03 |
+| 20000 | 1.718e-03 | 1.170e-03 | 1.651e-03 | 2.291e-03 | 3.356e-03 | 2.905e-03 | 2.321e-03 |
+| 50000 | 1.160e-03 | 3.756e-04 | 5.491e-04 | 8.204e-04 | 1.082e-03 | 1.052e-03 | 9.676e-04 |
+| 100000 | 1.215e-03 | 2.163e-04 | 2.646e-04 | 3.894e-04 | 5.341e-04 | 5.222e-04 | 4.985e-04 |
+| 200000 | 1.246e-03 | 1.344e-04 | 1.319e-04 | 1.871e-04 | 2.634e-04 | 2.628e-04 | 2.582e-04 |
 
 Log-log slopes against $n$ for the same runs:
 
@@ -185,11 +193,47 @@ Log-log slopes against $n$ for the same runs:
 | 64 | -1.31 | -1.19 | -1.10 | -1.20 |
 | 128 | -1.42 | -1.26 | -1.09 | -1.26 |
 
-The picture matches the Markov chain: wider is worse up to $n = 10^4$ (n = 200: 0.15 at width 16, 1.03 at width 128), whole-range slopes of -1.1 to -1.3 for widths 32 and above (last window -0.9 to -1.1), and width 16 flattens near 1.2e-3. The smallest width within 10% of the best mean is 16 for $n \le 10^4$ and 32 for $n \ge 2 \cdot 10^4$, widths 32 and 64 tie at $n = 200000$, and width 128 is never the best. The $K = 16$ exact-conditional value is small for this law, so the learned error shows in the sampler: at $n = 200$ its KL is 148 to 388 times that value, at $n = 200000$ it is 1.10, 1.13, 1.24 and 1.95 times that value for widths 32, 64, 128 and 16, and none of the 120 runs fell below it (smallest ratio 1.065).
+The picture matches the Markov chain: wider is worse up to $n = 10^4$ (n = 200: 0.15 at width 16, 1.03 at width 128), whole-range slopes of -1.1 to -1.3 for widths 32 and above (last window -0.9 to -1.1), and width 16 flattens near 1.2e-3. The smallest width within 10% of the best mean is 16 for $n \le 10^4$ and 32 for $n \ge 2 \cdot 10^4$, widths 32 and 64 tie at $n = 200000$, and width 128 is never the best (above width 64 in all 30 seed-paired cells). The $K = 16$ exact-conditional value is small for this law, so the learned error shows in the sampler: at $n = 200$ its KL is 148 to 388 times that value, at $n = 200000$ it is 1.10, 1.13, 1.24 and 1.95 times that value for widths 32, 64, 128 and 16, and none of the 120 runs fell below it (smallest ratio 1.065). At $n = 200000$ the plug-in tables have K = 16 KL 4.2e-3 to 4.3e-3 against 3.3e-3 for the best network.
+
+The plug-in tables again beat every network at $n = 200$ ($\alpha$ = 0.1 and 1) and at $n = 500$ ($\alpha$ = 1): at $n = 200$, $\alpha$ = 1 gives 5.4e-2 against 1.5e-1 for width 16. From $n = 1000$ the best network is below all three tables, by a factor 2 at $n = 200000$ (1.3e-4 against 2.6e-4). The training loss of width 128 at $n = 200$ is 1.1e-4 above its minimum, against 9.2e-2 for width 16:
+
+| n | width 16 | width 32 | width 64 | width 128 |
+|---|---|---|---|---|
+| 200 | 9.166e-02 | 3.848e-02 | 7.218e-03 | 1.092e-04 |
+| 2000 | 2.239e-02 | 1.458e-02 | 7.280e-03 | 1.961e-03 |
+| 200000 | 1.705e-03 | 3.038e-04 | 1.921e-04 | 8.335e-05 |
+
+Sampled $t$ against the exact expectation, mean over 3 seeds, for the same widths and sizes as on the Markov law:
+
+| width | n | cond KL exact | cond KL sampled | K = 16 exact | K = 16 sampled |
+|---|---|---|---|---|---|
+| 16 | 200 | 1.506e-01 | 1.006e-01 | 4.466e-01 | 3.850e-01 |
+| 16 | 2000 | 1.117e-02 | 8.058e-03 | 4.631e-02 | 3.601e-02 |
+| 16 | 20000 | 1.718e-03 | 2.289e-03 | 8.477e-03 | 1.024e-02 |
+| 16 | 200000 | 1.246e-03 | 1.861e-03 | 5.891e-03 | 7.984e-03 |
+| 128 | 200 | 1.034e+00 | 4.727e-01 | 1.173e+00 | 1.103e+00 |
+| 128 | 2000 | 4.135e-02 | 3.427e-02 | 1.594e-01 | 1.397e-01 |
+| 128 | 20000 | 2.291e-03 | 1.773e-03 | 1.429e-02 | 1.125e-02 |
+| 128 | 200000 | 1.871e-04 | 2.994e-04 | 3.746e-03 | 3.792e-03 |
+
+Budget check, seed 0 only, as for the Markov law (exact: L-BFGS iterations, 2000 against 6000; sampled: Adam steps, 12000 against 36000):
+
+| trainer | width | n | cond KL | cond KL, 3x budget | 3x / 1x |
+|---|---|---|---|---|---|
+| exact | 16 | 2000 | 1.160e-02 | 1.245e-02 | 1.07 |
+| exact | 128 | 2000 | 4.293e-02 | 6.548e-02 | 1.53 |
+| exact | 16 | 200000 | 9.656e-04 | 4.494e-04 | 0.47 |
+| exact | 128 | 200000 | 1.939e-04 | 2.397e-04 | 1.24 |
+| sampled | 16 | 2000 | 8.383e-03 | 9.844e-03 | 1.17 |
+| sampled | 128 | 2000 | 3.280e-02 | 5.952e-02 | 1.81 |
+| sampled | 16 | 200000 | 1.858e-03 | 1.256e-03 | 0.68 |
+| sampled | 128 | 200000 | 3.001e-04 | 2.425e-04 | 0.81 |
+
+The trainer comparison repeats the Markov one. Sampled-$t$ training gives the lower error for width 128 up to $n = 20000$ and the higher one at $n = 200000$, and for width 16 the lower error up to $n = 2000$ and the higher one from $n = 20000$ on. The largest factor between the trainers is 2.2 (3.2 on the Markov law). The longer run lowers the training loss in all four exact cells and raises the conditional KL of width 128 at both $n$ (ratios 1.53 and 1.24, against 1.73 and 1.35 on the Markov law), and it lowers that of width 16 at $n = 200000$ (0.47 exact, 0.68 sampled). Six of the eight cells move the same way on the two laws (the width 128 cells at both $n$ and the width 16 cells at $n = 200000$). For width 128 at $n = 200000$ the two trainers move opposite ways on both laws (exact 1.35 and 1.24, sampled 0.67 and 0.81). The two width 16 cells at $n = 2000$ do not agree between laws (ratios 1.00 and 0.94 on the Markov law, 1.07 and 1.17 here). These are single-seed cells and the comparisons were chosen on the Markov law, so a second law replicates their directions without proving them.
 
 ![Conditional KL and sampler KL against the number of training sequences, Potts ring](results/denoiser_potts.png)
 
-Solid lines: exact-expectation training, band = range over seeds. There are no sampled-$t$ runs for this law. Dashed line: sampler KL with exact conditionals.
+Solid lines: exact-expectation training, band = range over seeds. Crosses with dotted lines: sampled-$t$ training (sub-grid). Dashed line: sampler KL with exact conditionals.
 
 ### 3. Other conditionals can beat the exact ones
 
