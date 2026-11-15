@@ -115,7 +115,7 @@ KL of the K = 16 sampler on the learned conditionals, mean over 3 seeds (exact c
 
 Solid lines: exact-expectation training, band = range over seeds. Crosses with dotted lines: sampled-$t$ training (sub-grid). Dashed line: sampler KL with exact conditionals.
 
-Log-log slope of the conditional KL against $n$ (least squares on the 3-seed means over the stated range of $n$):
+Log-log slope of the conditional KL against $n$ (least-squares fits to the 3-seed means over the stated range of $n$; descriptive fits, not a test of a power law):
 
 | width | n 200 to 2000 | n 2000 to 20000 | n 20000 to 200000 | n 200 to 200000 |
 |---|---|---|---|---|
@@ -127,7 +127,7 @@ Log-log slope of the conditional KL against $n$ (least squares on the 3-seed mea
 What the numbers show:
 
 - With few sequences, wider is worse. For $n \le 2000$ the error grows with width (n = 200: 8.8e-2 at width 16, 3.3e-1 at width 128), and at $n = 5000$ widths 16 and 32 tie. There is no regularisation and no early stopping, which is consistent with the wide networks interpolating the few training sequences.
-- With many sequences the error falls like $n^{-1.1}$ to $n^{-1.2}$ for widths 32 to 128 (slopes over the whole range -1.06, -1.19, -1.20). Width 16 flattens near 1e-3 (slope -0.21 between 2e4 and 2e5), where its 2000 iterations are also not enough, see the budget table.
+- Over the whole range of $n$ the fits give slopes -1.06, -1.19 and -1.20 for widths 32, 64 and 128. They include the small-data regime, so they are not a large-sample rate: in the last window ($n$ from $2 \cdot 10^4$ to $2 \cdot 10^5$) the slopes are -0.76, -1.05 and -1.16, so width 32 has flattened while widths 64 and 128 still fall at about $n^{-1}$. Width 16 flattens near 1e-3 (slope -0.21 in the last window), where its 2000 iterations are also not enough, see the budget table.
 - Width at which the error stops improving, taken as the smallest width within 10% of the best mean: 16 for $n \le 5000$, 32 for $n$ from $10^4$ to $5 \cdot 10^4$, 64 for $n \ge 10^5$. Width 128 is never the best. At $n = 200000$ widths 64 and 128 differ by 1.0e-4 against 1.2e-4, inside the seed spread.
 - The sampler cannot go below the discretisation floor. With learned conditionals the K = 16 KL never fell below the exact-conditional value 1.751e-02 (smallest ratio over the 120 runs: 1.003). For $n \ge 10^5$ and widths 32 to 128 all 18 runs are within 6.1% of it, so more data does not remove this error and more steps do (section 1). With 200 sequences the sampler KL is 14 to 20 times the floor.
 
@@ -159,7 +159,7 @@ Budget check, seed 0 only, each cell against a run three times as long (exact: L
 | sampled | 16 | 200000 | 3.624e-03 | 2.014e-03 |
 | sampled | 128 | 200000 | 2.620e-04 | 1.745e-04 |
 
-A longer run lowers the error of narrow networks at large $n$, which are still improving, and raises the error of wide networks, which is consistent with them fitting the sampling noise of the training sequences.
+The effect of a longer run depends on width, $n$ and trainer. With the exact trainer the narrow network at $n = 200000$ improves (1.192e-03 to 8.919e-04) and is unchanged at $n = 2000$, and the wide network gets worse at both $n$ (at $n = 2000$: 2.325e-02 to 4.031e-02), which is consistent with fitting the sampling noise of the training sequences. With the sampled trainer both narrow cells improve, and the wide network gets worse at $n = 2000$ (1.339e-02 to 2.928e-02) but improves at $n = 200000$ (2.620e-04 to 1.745e-04), where it is still limited by optimisation. Each cell is one seed, so these eight comparisons do not support a general statement about overfitting.
 
 A second law, the Potts ring with coupling 1.0 (entropy 5.829, total correlation 0.763, K = 16 KL with exact conditionals 3.026e-03), with the exact trainer only (`results/denoiser_potts.json`, figure `results/denoiser_potts.png`). Conditional KL, mean over 3 seeds (seed to seed standard deviation over the mean: 0.06 in the median cell, 0.34 at most):
 
